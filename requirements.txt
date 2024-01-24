@@ -4,4 +4,4 @@
 
 
 qutip
-
+tqdm
