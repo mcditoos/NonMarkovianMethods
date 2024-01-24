@@ -65,12 +65,39 @@ class csolve:
             * self.bose(ν)
         )
         return var
+    def γdot(self, ν, w, w1, t):
+        var = ((1/(w-ν))*(1/(ν-w1))
+            * np.exp(1j * (w - w1) / 2 * t)
+            * self.spectral_density(ν)
+            * (np.sinc((w - ν) / (2 * np.pi) * t)
+               * np.sinc((w1 - ν) / (2 * np.pi) * t))
+            * (self.bose(ν) + 1)
+        )
+        var += (
+            t
+            * t
+            * np.exp(1j * (w - w1) / 2 * t)
+            * self.spectral_density(ν)
+            * (np.sinc((w + ν) / (2 * np.pi) * t)
+               * np.sinc((w1 + ν) / (2 * np.pi) * t))
+            * self.bose(ν)
+        )
+        return var
 
     def Γgen(self, w, w1, t, regularized=False):
         if regularized:
             return self.γ_star(w, w1, t)
         return quad_vec(
             lambda ν: self.γ(ν, w, w1, t),
+            0,
+            np.Inf,
+            epsabs=self.eps,
+            epsrel=self.eps,
+            quadrature="gk15",
+        )[0]
+    def Γgendot(self, w, w1, t, regularized=False):
+        return quad_vec(
+            lambda ν: self.γdot(ν, w, w1, t),
             0,
             np.Inf,
             epsabs=self.eps,
