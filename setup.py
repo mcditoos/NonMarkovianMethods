@@ -1,4 +1,5 @@
 from setuptools import setup
+from Cython.Build import cythonize
 
 setup(
     name='cumulant',
@@ -8,4 +9,5 @@ setup(
         'qutip',
         'scipy; python_version > "3.6"',
     ],
+    ext_modules=cythonize("integrals.pyx")
 )
