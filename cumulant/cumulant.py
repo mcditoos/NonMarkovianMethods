@@ -86,10 +86,10 @@ class csolve:
     def generator(self, regularized=False):
         """Generates the cumulant super operator"""
         superop = 0
-        if _qutip:
+        if type(self.Hsys) != np.ndarray:
             evals, all_state = self.Hsys.eigenstates()
         else:
-            evals, all_state = np.linself.Hsys
+            evals, all_state = np.linalg.eig(self.Hsys)
 
         N = len(all_state)
         collapse_list = []
