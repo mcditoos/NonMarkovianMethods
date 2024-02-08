@@ -25,3 +25,6 @@ class TestCumulant:
     def test_spectral_density(self, init):
         assert np.isclose(init.spectral_density(0), 0)
         assert np.isclose(init.spectral_density(1e8), 0)
+
+    def test_γ_star(self, init):
+        assert (init.γ_star(1, 1, 0) == 0)

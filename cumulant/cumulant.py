@@ -6,7 +6,7 @@ try:
     _qutip = True
 except ModuleNotFoundError:
     _qutip = False
-    from utils import spre, spost
+    from utils import spre, spost, ket
 import itertools
 
 
@@ -173,7 +173,6 @@ class csolve:
 
 
 # TODO Add Lamb-shift
-
 
     def ξ(self, ν, w, w0, T, t, wc, lam):
         if ν == w:
