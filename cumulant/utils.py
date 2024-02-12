@@ -1,8 +1,10 @@
 import numpy as np
+from scipy.linalg import expm
 
 
 class spre:
     def __init__(self, op):
+        op = op.astype('complex128')
         self.right = np.kron(op, np.eye(op.shape[0]))
         self.dim = op.shape[0]
         self.func = lambda x: (
@@ -24,7 +26,7 @@ class spre:
         return self
 
     def __mul__(self, other):
-        if type(other) in (int, float, complex):
+        if type(other) in (int, float, complex, np.complex128):
             self.right *= other
             self.func = lambda x: (
                 self.right@x.reshape(self.dim**2)).reshape(self.dim, self.dim)
@@ -37,6 +39,7 @@ class spre:
 
 class spost:
     def __init__(self, op):
+        op = op.astype('complex128')
         self.right = np.kron(np.eye(op.shape[0]), op.T)
         self.dim = op.shape[0]
         self.func = lambda x: (
@@ -58,7 +61,7 @@ class spost:
         return self
 
     def __mul__(self, other):
-        if type(other) in (int, float, complex):
+        if type(other) in (int, float, complex, np.complex128):
             self.right *= other
             self.func = lambda x: (
                 self.right@x.reshape(self.dim**2)).reshape(self.dim, self.dim)

@@ -1,3 +1,3 @@
 from cumulant.cumulant import csolve
-
-__all__ = [csolve]
+from .utils import spre, spost
+__all__ = [csolve, spre, spost]
