@@ -176,7 +176,7 @@ class csolve:
                         np.conjugate(eldict[i[0]]).T) -
                      ((spre(np.conjugate(eldict[i[0]]).T @ eldict[i[1]]) +
                        spost(np.conjugate(eldict[i[0]]).T @ eldict[i[1]])
-                      * 0.5))))
+                       )*0.5)))
             else:
                 matrixform.append(
                     (spre(eldict[i[1]]) * spost(eldict[i[0]].dag()) -
@@ -186,9 +186,14 @@ class csolve:
         ll = []
         superop = []
         for l in range(len(self.t)):
-            ll = [decays[j][l]*matrixform[j]
-                  for j in range(len(combinations))]
-            superop.append(sum(ll))
+            if _qutip:
+                ll = [matrixform[j]*decays[j][l]
+                      for j in range(len(combinations))]
+                superop.append(sum(ll))
+            else:
+                ll = [matrixform[j].right*decays[j][l]
+                      for j in range(len(combinations))]
+                superop.append(sum(ll))
             ll = []
         self.generators = superop
 
@@ -198,7 +203,7 @@ class csolve:
             return [i.expm()(rho0) for i in tqdm(self.generators,
                                                  desc='Computing Exponential of Generators . . . .')]
         else:
-            return [(expm(i.right)@(rho0.reshape(rho0.shape[0]**2))).reshape(rho0.shape)
+            return [(expm(i)@(rho0.reshape(rho0.shape[0]**2))).reshape(rho0.shape)
                     for i in tqdm(
                 self.generators,
                 desc='Computing Exponential of Generators . . . .')]

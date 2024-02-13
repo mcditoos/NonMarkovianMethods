@@ -19,6 +19,15 @@ class spre:
             self.right@x.reshape(self.dim**2)).reshape(self.dim, self.dim)
         return self
 
+    def __radd__(self, other):
+        if type(other) == int:
+            self.right += other
+            return self
+        self.right += other.right
+        self.func = lambda x: (
+            self.right@x.reshape(self.dim**2)).reshape(self.dim, self.dim)
+        return self
+
     def __sub__(self, other):
         self.right -= other.right
         self.func = lambda x: (
