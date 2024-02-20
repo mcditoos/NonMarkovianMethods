@@ -24,6 +24,21 @@ class csolve:
         self.w0 = w0
 
     def bose(self, ν):
+        r"""
+        It computes the Bose-Einstein distribution
+        
+        $$n(\omega)=\frac{1}{e^{\beta \omega}-1}$$
+        
+        Parameters:
+        ----------
+        ν: float
+            The mode at which to compute the thermal population
+        
+        Returns:
+        -------
+        float
+            The thermal population of mode ν
+        """
         if self.T == 0:
             return 0
         if ν == 0:
@@ -31,6 +46,7 @@ class csolve:
         return np.exp(-ν / self.T) / (1-np.exp(-ν / self.T))
 
     def spectral_density(self, w):
+        
         if self.typeof == "ohmic":
             return self.lam * w * np.exp(-abs(w) / self.gamma)
         elif self.typeof == 'ud':
@@ -41,9 +57,31 @@ class csolve:
         else:
             return None
 
-    def γ_star(self, w, w1, t):
+    def νfa(self, w, w1, t):
         """
-        One start regularization
+        It describes the decay rates for the Filtered Approximation of the
+        cumulant equation
+        
+        $$\gamma(\omega,\omega^\prime,t)= 2\pi t e^{i \frac{\omega^\prime
+        -\omega}{2}t}\mathrm{sinc} \left(\frac{\omega^\prime-\omega}{2}t\right)
+         \left(J(\omega^\prime) (n(\omega^\prime)+1)J(\omega) (n(\omega)+1)
+         \right^{\frac{1}{2}}$$
+        
+        Parameters:
+        ----------
+        
+        w: float or numpy.ndarray
+        
+        w1: float or numpy.ndarray
+        
+        t: float or numpy.ndarray
+        
+        Returns:
+        --------
+        float or numpy.ndarray
+            It returns a value or array describing the decay between the levels
+            with energies w and w1 at time t
+        
         """
         var = (2 * np.pi * t * np.exp(1j * (w1 - w) * t / 2)
                * np.sinc((w1 - w) * t / (2 * np.pi))
@@ -70,7 +108,7 @@ class csolve:
 
     def Γgen(self, w, w1, t, regularized=False):
         if regularized:
-            return self.γ_star(w, w1, t)
+            return self.νfa(w, w1, t)
         else:
             integrals = quad_vec(
                 self.γ,
@@ -84,7 +122,6 @@ class csolve:
             return t*t*integrals
 
     def generator(self, regularized=False):
-        """Generates the cumulant super operator"""
         superop = 0
         if type(self.Hsys) != np.ndarray:
             evals, all_state = self.Hsys.eigenstates()
@@ -198,15 +235,36 @@ class csolve:
         self.generators = superop
 
     def evolution(self, rho0, regularized=False):
+        """
+        This function computes the evolution of the state rho0
+        
+        Parameters:
+        ----------
+        
+        rho0: numpy.ndarray or qutip.Qobj
+            The initial state of the quantum system under consideration.
+        regularized: bool
+            When False the full cumulant equation/refined weak coupling is 
+            computed, when True the Filtered Approximation (FA is computed),
+            this greatly reduces computational time, at the expense of 
+            diminishing accuracy particularly for the populations of the system
+            at early times.
+        
+        Returns:
+        -------
+        list
+            a list containing all of the density matrices, at all timesteps of
+            the evolution
+        """
         self.generator(regularized)
         if _qutip:
             return [i.expm()(rho0) for i in tqdm(self.generators,
-                                                 desc='Computing Exponential of Generators . . . .')]
+                    desc='Computing Exponential of Generators . . . .')]
         else:
-            return [(expm(i)@(rho0.reshape(rho0.shape[0]**2))).reshape(rho0.shape)
-                    for i in tqdm(
-                self.generators,
-                desc='Computing Exponential of Generators . . . .')]
+            return [(expm(i)@(rho0.reshape(rho0.shape[0]**2)))
+                    .reshape(rho0.shape)
+                    for i in tqdm(self.generators,
+                    desc='Computing Exponential of Generators . . . .')]
 
 
 # TODO Add Lamb-shift
@@ -214,3 +272,4 @@ class csolve:
 # TODO pictures
 # TODO better naming
 # TODO explain regularization issues
+# TODO make result object
