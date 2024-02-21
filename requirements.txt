@@ -5,6 +5,4 @@
 
 qutip
 tqdm
-mkdocs-jupyter
-mkdocstrings
-mkdocs-material
+
