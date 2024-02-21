@@ -44,6 +44,14 @@ class OhmicBath(BosonicBath):
         self.wc = wc
 
     def spectral_density(self, w):
+        r"""
+        It describes the spectral density of an Ohmic spectral density given by
+        
+        $$ J(\omega)= \alpha \omega e^{-\frac{|\omega|}{\omega_{c}}} $$
+        
+        Parameters
+        ----------
+        """
         return self.alpha*w*np.exp(-abs(w)/self.wc)
 
     def correlation_function(self, t):

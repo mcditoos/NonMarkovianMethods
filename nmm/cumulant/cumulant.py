@@ -6,7 +6,7 @@ try:
     _qutip = True
 except ModuleNotFoundError:
     _qutip = False
-    from utils import spre, spost
+    from nmm.utils.utils import spre, spost
     from scipy.linalg import expm
 import itertools
 
@@ -20,7 +20,7 @@ class csolve:
         self.spectral_density = bath.spectral_density
         self.Q = Q
 
-    def νfa(self, w, w1, t):
+    def γfa(self, w, w1, t):
         r"""
         It describes the decay rates for the Filtered Approximation of the
         cumulant equation
@@ -30,17 +30,17 @@ class csolve:
          \left(J(\omega^\prime) (n(\omega^\prime)+1)J(\omega) (n(\omega)+1)
          \right)^{\frac{1}{2}}$$
 
-        Parameters:
+        Parameters
         ----------
 
-        w: float or numpy.ndarray
+        w : float or numpy.ndarray
 
-        w1: float or numpy.ndarray
+        w1 : float or numpy.ndarray
 
-        t: float or numpy.ndarray
+        t : float or numpy.ndarray
 
-        Returns:
-        --------
+        Returns
+        -------
         float or numpy.ndarray
             It returns a value or array describing the decay between the levels
             with energies w and w1 at time t
@@ -104,27 +104,25 @@ class csolve:
         sinc\left(\frac{(\omega+\omega)t}{2}\right) 
         sinc\left(\frac{(\omega'+\omega)t}{2}\right)   \right]$$
 
-        Parameters:
+        Parameters
         ----------
 
-        w: float or numpy.ndarray
+        w : float or numpy.ndarray
+        w1 : float or numpy.ndarray
+        t : float or numpy.ndarray
 
-        w1: float or numpy.ndarray
-
-        t: float or numpy.ndarray
-
-        Returns:
-        --------
+        Returns
+        -------
         float or numpy.ndarray
             It returns a value or array describing the decay between the levels
             with energies w and w1 at time t
 
         """
         if approximated:
-            return self.νfa(w, w1, t)
+            return self.γfa(w, w1, t)
         else:
             integrals = quad_vec(
-                self.γ,
+                self._γ,
                 0,
                 np.Inf,
                 args=(w, w1, t),
@@ -256,6 +254,7 @@ class csolve:
 
         rho0 : numpy.ndarray or qutip.Qobj
             The initial state of the quantum system under consideration.
+            
         approximated : bool
             When False the full cumulant equation/refined weak coupling is
             computed, when True the Filtered Approximation (FA is computed),
@@ -263,7 +262,7 @@ class csolve:
             diminishing accuracy particularly for the populations of the system
             at early times.
 
-        Returns:
+        Returns
         -------
         list
             a list containing all of the density matrices, at all timesteps of
@@ -286,3 +285,5 @@ class csolve:
 # TODO better naming
 # TODO explain regularization issues
 # TODO make result object
+# TODO Add support to for multiple baths (it can be done simply by calling
+# generators on the different baths and adding)

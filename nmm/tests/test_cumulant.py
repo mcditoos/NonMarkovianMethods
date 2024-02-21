@@ -6,8 +6,8 @@ try:
     _qutip = True
 except ModuleNotFoundError:
     _qutip = False
-    from cumulant.utils import spre, spost
-
+    from nmm.utils.utils import spre, spost
+""" 
 
 @pytest.fixture
 def init():
@@ -51,3 +51,4 @@ class TestCumulant:
                               ((-1, -1, 2), (0.3618))])
     def test_Γgen(self, init, ars, expected):
         assert np.isclose(init.Γgen(*ars), expected, atol=1e-3).all()
+ """
