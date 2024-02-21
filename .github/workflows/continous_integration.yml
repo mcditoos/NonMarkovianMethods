@@ -29,5 +29,5 @@ jobs:
     - name: Deploy MkDocs
       uses: mhausenblas/mkdocs-deploy-gh-pages@1.26
       env:
-      CONFIG_FILE: mkdocs.yml
-      REQUIREMENTS: requirements.txt      
+        CONFIG_FILE: mkdocs.yml
+        REQUIREMENTS: requirements.txt      
