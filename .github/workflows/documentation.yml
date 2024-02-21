@@ -32,8 +32,8 @@ jobs:
           restore-keys: |
             mkdocs-material-
       - run: pip install mkdocs-material 
-      - run: pip install mkdocstrings
-      - run: pip install mkdocs-jupyter
+      - run: pip install mkdocstrings mkdocstrings-python
+      - run: pip install mkdocs-jupyter mkdocs-material-extensions
 
 
       - run: mkdocs gh-deploy --force
