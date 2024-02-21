@@ -1,3 +1,4 @@
-from cumulant.cumulant import csolve
+from .cumulant import csolve
+from .baths import OhmicBath
 from .utils import spre, spost
-__all__ = [csolve, spre, spost]
+__all__ = [csolve, spre, spost, OhmicBath]

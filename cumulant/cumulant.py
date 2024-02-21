@@ -52,11 +52,12 @@ class csolve:
                * np.sqrt(self.spectral_density(w) * (self.bose(w) + 1)))
         return var
 
-    def γ(self, ν, w, w1, t):
+    def _γ(self, ν, w, w1, t):
         r"""
-        It describes the decay rates for the cumulant equation
+        It describes the Integrand of the decay rates of the cumulant equation
+        for bosonic baths
 
-        $$\Gamma(w,w',t)=\int_{0}^{t} dt_1 \int_{0}^{t} dt_2 
+        $$\Gamma(w,w',t)=\int_{0}^{t} dt_1 \int_{0}^{t} dt_2
         e^{i (w t_1 - w' t_2)} \mathcal{C}(t_{1},t_{2})$$
 
         Parameters:
@@ -91,8 +92,35 @@ class csolve:
         )
         return var
 
-    def Γgen(self, w, w1, t, regularized=False):
-        if regularized:
+    def Γgen(self, w, w1, t, approximated=False):
+        r"""
+        It describes the the decay rates of the cumulant equation
+        for bosonic baths
+
+        $$\Gamma(\omega,\omega',t) = t^{2}\int_{0}^{\infty} d\omega 
+        e^{i\frac{\omega-\omega'}{2} t} J(\omega) \left[ (n(\omega)+1) 
+        sinc\left(\frac{(\omega-\omega)t}{2}\right)
+        sinc\left(\frac{(\omega'-\omega)t}{2}\right)+ n(\omega) 
+        sinc\left(\frac{(\omega+\omega)t}{2}\right) 
+        sinc\left(\frac{(\omega'+\omega)t}{2}\right)   \right]$$
+
+        Parameters:
+        ----------
+
+        w: float or numpy.ndarray
+
+        w1: float or numpy.ndarray
+
+        t: float or numpy.ndarray
+
+        Returns:
+        --------
+        float or numpy.ndarray
+            It returns a value or array describing the decay between the levels
+            with energies w and w1 at time t
+
+        """
+        if approximated:
             return self.νfa(w, w1, t)
         else:
             integrals = quad_vec(
@@ -106,7 +134,7 @@ class csolve:
             )[0]
             return t*t*integrals
 
-    def generator(self, regularized=False):
+    def generator(self, approximated=False):
         superop = 0
         if type(self.Hsys) != np.ndarray:
             evals, all_state = self.Hsys.eigenstates()
@@ -188,7 +216,7 @@ class csolve:
             if (j in done) & (i != j):
                 rates[i] = np.conjugate(rates[j])
             else:
-                rates[i] = self.Γgen(i[0], i[1], self.t, regularized)
+                rates[i] = self.Γgen(i[0], i[1], self.t, approximated)
 
         for i in tqdm(combinations, desc='Calculating the generator ...'):
             decays.append(rates[i])
@@ -219,19 +247,19 @@ class csolve:
             ll = []
         self.generators = superop
 
-    def evolution(self, rho0, regularized=False):
-        """
-        This function computes the evolution of the state rho0
+    def evolution(self, rho0, approximated=False):
+        r"""
+        This function computes the evolution of the state $\rho(0)$
 
-        Parameters:
+        Parameters
         ----------
 
-        rho0: numpy.ndarray or qutip.Qobj
+        rho0 : numpy.ndarray or qutip.Qobj
             The initial state of the quantum system under consideration.
-        regularized: bool
-            When False the full cumulant equation/refined weak coupling is 
+        approximated : bool
+            When False the full cumulant equation/refined weak coupling is
             computed, when True the Filtered Approximation (FA is computed),
-            this greatly reduces computational time, at the expense of 
+            this greatly reduces computational time, at the expense of
             diminishing accuracy particularly for the populations of the system
             at early times.
 
@@ -241,7 +269,7 @@ class csolve:
             a list containing all of the density matrices, at all timesteps of
             the evolution
         """
-        self.generator(regularized)
+        self.generator(approximated)
         if _qutip:
             return [i.expm()(rho0) for i in tqdm(self.generators,
                     desc='Computing Exponential of Generators . . . .')]

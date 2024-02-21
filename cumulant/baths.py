@@ -57,7 +57,7 @@ class OverdampedBath(BosonicBath):
         self.gamma = gamma
 
     def spectral_density(self, w):
-        return 2*self.lam*self.gamma*w/(self.gamma**2 + self.lam**2)
+        return 2*self.lam*self.gamma*w/(self.gamma**2 + w**2)
 
     def correlation_function(self, t):
         return None
