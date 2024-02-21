@@ -26,4 +26,9 @@ jobs:
             python -m pip install -r requirements.txt
     - name: Run tests
       run: pytest
-
+    - name: Deploy MkDocs
+      uses: mhausenblas/mkdocs-deploy-gh-pages@1.26
+              env:
+          GITHUB_TOKEN: ${{ secrets.TOKEN }}
+          CONFIG_FILE: mkdocs.yml
+          REQUIREMENTS: requirements.txt      

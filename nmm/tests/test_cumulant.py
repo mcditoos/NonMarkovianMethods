@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from cumulant import csolve
+from nmm import csolve
 try:
     from qutip import spre, spost, Qobj
     _qutip = True
