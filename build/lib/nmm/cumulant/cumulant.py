@@ -12,15 +12,14 @@ import itertools
 
 
 class csolve:
-    def __init__(self, Hsys, t, bath, Q, eps=1e-4):
+    def __init__(self, Hsys, t, baths,Qs, eps=1e-4):
         self.Hsys = Hsys
         self.t = t
         self.eps = eps
-        self.bose = bath.bose
-        self.spectral_density = bath.spectral_density
-        self.Q = Q
+        self.baths= baths
+        self.Qs = Qs
 
-    def γfa(self, w, w1, t):
+    def γfa(self,bath, w, w1, t):
         r"""
         It describes the decay rates for the Filtered Approximation of the
         cumulant equation
@@ -48,11 +47,11 @@ class csolve:
         """
         var = (2 * np.pi * t * np.exp(1j * (w1 - w) * t / 2)
                * np.sinc((w1 - w) * t / (2 * np.pi))
-               * np.sqrt(self.spectral_density(w1) * (self.bose(w1) + 1))
-               * np.sqrt(self.spectral_density(w) * (self.bose(w) + 1)))
+               * np.sqrt(bath.spectral_density(w1) * (bath.bose(w1) + 1))
+               * np.sqrt(bath.spectral_density(w) * (bath.bose(w) + 1)))
         return var
 
-    def _γ(self, ν, w, w1, t):
+    def _γ(self, ν,bath, w, w1, t):
         r"""
         It describes the Integrand of the decay rates of the cumulant equation
         for bosonic baths
@@ -78,21 +77,21 @@ class csolve:
         """
         var = (
             np.exp(1j * (w - w1) / 2 * t)
-            * self.spectral_density(ν)
+            * bath.spectral_density(ν)
             * (np.sinc((w - ν) / (2 * np.pi) * t)
                * np.sinc((w1 - ν) / (2 * np.pi) * t))
-            * (self.bose(ν) + 1)
+            * (bath.bose(ν) + 1)
         )
         var += (
             np.exp(1j * (w - w1) / 2 * t)
-            * self.spectral_density(ν)
+            * bath.spectral_density(ν)
             * (np.sinc((w + ν) / (2 * np.pi) * t)
                * np.sinc((w1 + ν) / (2 * np.pi) * t))
-            * self.bose(ν)
+            * bath.bose(ν)
         )
         return var
 
-    def Γgen(self, w, w1, t, approximated=False):
+    def Γgen(self, bath ,w, w1, t, approximated=False):
         r"""
         It describes the the decay rates of the cumulant equation
         for bosonic baths
@@ -119,13 +118,13 @@ class csolve:
 
         """
         if approximated:
-            return self.γfa(w, w1, t)
+            return self.γfa(bath,w, w1, t)
         else:
             integrals = quad_vec(
                 self._γ,
                 0,
                 np.Inf,
-                args=(w, w1, t),
+                args=(bath,w, w1, t),
                 epsabs=self.eps,
                 epsrel=self.eps,
                 quadrature="gk15"
@@ -139,111 +138,113 @@ class csolve:
         else:
             evals, all_state = np.linalg.eig(self.Hsys)
             all_state = [i.reshape((len(i), 1)) for i in all_state]
-
-        N = len(all_state)
-        collapse_list = []
-        ws = []
-        for j in range(N):
-            for k in range(j + 1, N):
-                Deltajk = evals[k] - evals[j]
-                ws.append(Deltajk)
-                if type(self.Hsys) != np.ndarray:
-                    collapse_list.append(
-                        (
-                            all_state[j]
-                            * all_state[j].dag()
-                            * self.Q
-                            * all_state[k]
-                            * all_state[k].dag()
-                        )
-                    )  # emission
-                    ws.append(-Deltajk)
-                    collapse_list.append(
-                        (
-                            all_state[k]
-                            * all_state[k].dag()
-                            * self.Q
-                            * all_state[j]
-                            * all_state[j].dag()
-                        )
-                    )  # absorption
-                else:
-                    collapse_list.append(
-                        (
-                            all_state[j]
-                            @ np.conjugate(all_state[j]).T
-                            @ self.Q
-                            @ all_state[k]
-                            @ np.conjugate(all_state[k]).T
-                        )
-                    )  # emission
-                    ws.append(-Deltajk)
-                    collapse_list.append(
-                        (
-                            all_state[k]
-                            @ np.conjugate(all_state[k]).T
-                            @ self.Q
-                            @ all_state[j]
-                            @ np.conjugate(all_state[j]).T
-                        )
-                    )  # absorption
-        collapse_list.append(self.Q - sum(collapse_list))  # Dephasing
-        ws.append(0)
-        eldict = {ws[i]: collapse_list[i] for i in range(len(ws))}
-        dictrem = {}
-        if _qutip:
-            empty = Qobj([[0]*N]*N)
-            for keys, values in eldict.items():
-                if (values != empty):
-                    dictrem[keys] = values
-        else:
-            empty = np.array([[0]*N]*N)
-            for keys, values in eldict.items():
-                if (values != empty).any():
-                    dictrem[keys] = values
-        ws = list(dictrem.keys())
-        eldict = dictrem
-        combinations = list(itertools.product(ws, ws))
-        decays = []
-        matrixform = []
-        rates = {}
-        done = []
-        for i in tqdm(combinations, desc='Calculating Integrals ...'):
-            done.append(i)
-            j = (i[1], i[0])
-            if (j in done) & (i != j):
-                rates[i] = np.conjugate(rates[j])
-            else:
-                rates[i] = self.Γgen(i[0], i[1], self.t, approximated)
-
-        for i in tqdm(combinations, desc='Calculating the generator ...'):
-            decays.append(rates[i])
-            if _qutip is False:
-                matrixform.append(
-                    (spre(eldict[i[1]]) * spost(
-                        np.conjugate(eldict[i[0]]).T) -
-                     ((spre(np.conjugate(eldict[i[0]]).T @ eldict[i[1]]) +
-                       spost(np.conjugate(eldict[i[0]]).T @ eldict[i[1]])
-                       )*0.5)))
-            else:
-                matrixform.append(
-                    (spre(eldict[i[1]]) * spost(eldict[i[0]].dag()) -
-                     (0.5 *
-                     (spre(eldict[i[0]].dag() * eldict[i[1]]) + spost(
-                         eldict[i[0]].dag() * eldict[i[1]])))))
-        ll = []
-        superop = []
-        for l in range(len(self.t)):
+        generators=[]
+        for Q,bath in zip(self.Qs,self.baths):
+            N = len(all_state)
+            collapse_list = []
+            ws = []
+            for j in range(N):
+                for k in range(j + 1, N):
+                    Deltajk = evals[k] - evals[j]
+                    ws.append(Deltajk)
+                    if type(self.Hsys) != np.ndarray:
+                        collapse_list.append(
+                            (
+                                all_state[j]
+                                * all_state[j].dag()
+                                * Q
+                                * all_state[k]
+                                * all_state[k].dag()
+                            )
+                        )  # emission
+                        ws.append(-Deltajk)
+                        collapse_list.append(
+                            (
+                                all_state[k]
+                                * all_state[k].dag()
+                                * Q
+                                * all_state[j]
+                                * all_state[j].dag()
+                            )
+                        )  # absorption
+                    else:
+                        collapse_list.append(
+                            (
+                                all_state[j]
+                                @ np.conjugate(all_state[j]).T
+                                @ Q
+                                @ all_state[k]
+                                @ np.conjugate(all_state[k]).T
+                            )
+                        )  # emission
+                        ws.append(-Deltajk)
+                        collapse_list.append(
+                            (
+                                all_state[k]
+                                @ np.conjugate(all_state[k]).T
+                                @ Q
+                                @ all_state[j]
+                                @ np.conjugate(all_state[j]).T
+                            )
+                        )  # absorption
+            collapse_list.append(Q - sum(collapse_list))  # Dephasing
+            ws.append(0)
+            eldict = {ws[i]: collapse_list[i] for i in range(len(ws))}
+            dictrem = {}
             if _qutip:
-                ll = [matrixform[j]*decays[j][l]
-                      for j in range(len(combinations))]
-                superop.append(sum(ll))
+                empty = Qobj([[0]*N]*N)
+                for keys, values in eldict.items():
+                    if (values != empty):
+                        dictrem[keys] = values
             else:
-                ll = [matrixform[j].right*decays[j][l]
-                      for j in range(len(combinations))]
-                superop.append(sum(ll))
+                empty = np.array([[0]*N]*N)
+                for keys, values in eldict.items():
+                    if (values != empty).any():
+                        dictrem[keys] = values
+            ws = list(dictrem.keys())
+            eldict = dictrem
+            combinations = list(itertools.product(ws, ws))
+            decays = []
+            matrixform = []
+            rates = {}
+            done = []
+            for i in tqdm(combinations, desc='Calculating Integrals ...'):
+                done.append(i)
+                j = (i[1], i[0])
+                if (j in done) & (i != j):
+                    rates[i] = np.conjugate(rates[j])
+                else:
+                    rates[i] = self.Γgen(bath,i[0], i[1], self.t, approximated)
+
+            for i in tqdm(combinations, desc='Calculating the generator ...'):
+                decays.append(rates[i])
+                if _qutip is False:
+                    matrixform.append(
+                        (spre(eldict[i[1]]) * spost(
+                            np.conjugate(eldict[i[0]]).T) -
+                        ((spre(np.conjugate(eldict[i[0]]).T @ eldict[i[1]]) +
+                        spost(np.conjugate(eldict[i[0]]).T @ eldict[i[1]])
+                        )*0.5)))
+                else:
+                    matrixform.append(
+                        (spre(eldict[i[1]]) * spost(eldict[i[0]].dag()) -
+                        (0.5 *
+                        (spre(eldict[i[0]].dag() * eldict[i[1]]) + spost(
+                            eldict[i[0]].dag() * eldict[i[1]])))))
             ll = []
-        self.generators = superop
+            superop = []
+            for l in range(len(self.t)):
+                if _qutip:
+                    ll = [matrixform[j]*decays[j][l]
+                        for j in range(len(combinations))]
+                    superop.append(sum(ll))
+                else:
+                    ll = [matrixform[j].right*decays[j][l]
+                        for j in range(len(combinations))]
+                    superop.append(sum(ll))
+                ll = []
+            generators.append(superop)
+            return generators
 
     def evolution(self, rho0, approximated=False):
         r"""
