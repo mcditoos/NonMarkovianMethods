@@ -9,6 +9,7 @@ except ModuleNotFoundError:
     from nmm.utils.utils import spre, spost
     from scipy.linalg import expm
 import itertools
+from collections import defaultdict
 
 
 class csolve:
@@ -130,16 +131,14 @@ class csolve:
                 quadrature="gk15"
             )[0]
             return t*t*integrals
-
-    def generator(self, approximated=False):
-        superop = 0
+    def eigenbasis_decomposition(self):
         if type(self.Hsys) != np.ndarray:
             evals, all_state = self.Hsys.eigenstates()
         else:
             evals, all_state = np.linalg.eig(self.Hsys)
             all_state = [i.reshape((len(i), 1)) for i in all_state]
-        generators=[]
         for Q,bath in zip(self.Qs,self.baths):
+            print(len(self.baths))
             N = len(all_state)
             collapse_list = []
             ws = []
@@ -190,6 +189,69 @@ class csolve:
             collapse_list.append(Q - sum(collapse_list))  # Dephasing
             ws.append(0)
             eldict = {ws[i]: collapse_list[i] for i in range(len(ws))}
+            return eldict
+    def generator(self, approximated=False):
+        if type(self.Hsys) != np.ndarray:
+            evals, all_state = self.Hsys.eigenstates()
+        else:
+            evals, all_state = np.linalg.eig(self.Hsys)
+            all_state = [i.reshape((len(i), 1)) for i in all_state]
+        generators=[]
+        for Q,bath in zip(self.Qs,self.baths):
+            print(len(self.baths))
+            N = len(all_state)
+            collapse_list = []
+            ws = []
+            for j in range(N):
+                for k in range(j + 1, N):
+                    Deltajk = evals[k] - evals[j]
+                    ws.append(Deltajk)
+                    if type(self.Hsys) != np.ndarray:
+                        collapse_list.append(
+                            (
+                                all_state[j]
+                                * all_state[j].dag()
+                                * Q
+                                * all_state[k]
+                                * all_state[k].dag()
+                            )
+                        )  # emission
+                        ws.append(-Deltajk)
+                        collapse_list.append(
+                            (
+                                all_state[k]
+                                * all_state[k].dag()
+                                * Q
+                                * all_state[j]
+                                * all_state[j].dag()
+                            )
+                        )  # absorption
+                    else:
+                        collapse_list.append(
+                            (
+                                all_state[j]
+                                @ np.conjugate(all_state[j]).T
+                                @ Q
+                                @ all_state[k]
+                                @ np.conjugate(all_state[k]).T
+                            )
+                        )  # emission
+                        ws.append(Deltajk)
+                        collapse_list.append(
+                            (
+                                all_state[k]
+                                @ np.conjugate(all_state[k]).T
+                                @ Q
+                                @ all_state[j]
+                                @ np.conjugate(all_state[j]).T
+                            )
+                        )  # absorption
+            collapse_list.append(Q - sum(collapse_list))  # Dephasing
+            ws.append(0)
+            output = defaultdict(list)
+            for k,key in enumerate(ws):
+                output[key].append(collapse_list[k])
+            eldict={x:sum(y) for x, y in output.items()}
             dictrem = {}
             if _qutip:
                 empty = Qobj([[0]*N]*N)
@@ -214,7 +276,10 @@ class csolve:
                 if (j in done) & (i != j):
                     rates[i] = np.conjugate(rates[j])
                 else:
-                    rates[i] = self.Γgen(bath,i[0], i[1], self.t, approximated)
+                    if (eldict[i[0]]==empty) or (eldict[i[1]]==empty):
+                        rates[i]=np.zeros(self.t.shape)
+                    else:
+                        rates[i] = self.Γgen(bath,i[0], i[1], self.t, approximated)
 
             for i in tqdm(combinations, desc='Calculating the generator ...'):
                 decays.append(rates[i])
@@ -243,9 +308,18 @@ class csolve:
                         for j in range(len(combinations))]
                     superop.append(sum(ll))
                 ll = []
-            generators.append(superop)
+            generators.extend(superop)
+        self.generators=self._reformat(generators)
+    
+    def _reformat(self,generators):
+        if len(generators)==len(self.t):
             return generators
-
+        else:
+            one_list_for_each_bath=[generators[i*len(self.t):(i+1)*len(self.t)] 
+                                    for i in 
+                                    range(0,int(len(generators)/len(self.t)) )]
+            composed= list(map(sum, zip(*one_list_for_each_bath)))
+            return composed
     def evolution(self, rho0, approximated=False):
         r"""
         This function computes the evolution of the state $\rho(0)$
@@ -288,3 +362,5 @@ class csolve:
 # TODO make result object
 # TODO Add support to for multiple baths (it can be done simply by calling
 # generators on the different baths and adding)
+# TODO support Tensor Networks
+# TODO  get rid of useless integrals

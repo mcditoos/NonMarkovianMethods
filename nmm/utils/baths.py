@@ -23,7 +23,7 @@ class BosonicBath:
         """
         if self.T == 0:
             return 0
-        if ν == 0:
+        if np.isclose(ν,0).all():
             return 0
         return np.exp(-ν / self.T) / (1-np.exp(-ν / self.T))
 

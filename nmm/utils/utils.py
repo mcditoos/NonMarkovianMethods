@@ -79,3 +79,11 @@ class spost:
         self.func = lambda x: (
             self.right@x.reshape(self.dim**2)).reshape(self.dim, self.dim)
         return self
+    
+class result:
+    def __init__(self,rho,tlist,time,malloc):
+        self.states=rho
+        self.time=tlist
+        self.duration=time
+        self.malloc=malloc
+        
