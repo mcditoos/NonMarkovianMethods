@@ -10,7 +10,7 @@ except ModuleNotFoundError:
     from scipy.linalg import expm
 import itertools
 from collections import defaultdict
-
+from qutip.solver.heom import BathExponent
 
 class csolve:
     def __init__(self, Hsys, t, baths,Qs, eps=1e-4):
@@ -92,7 +92,7 @@ class csolve:
         )
         return var
 
-    def Γgen(self, bath ,w, w1, t, approximated=False):
+    def Γgen(self, bath ,w, w1, t, approximated=False, matsubara=False):
         r"""
         It describes the the decay rates of the cumulant equation
         for bosonic baths
@@ -120,6 +120,22 @@ class csolve:
         """
         if approximated:
             return self.γfa(bath,w, w1, t)
+        elif matsubara:
+            result=0
+            for exp in bath.exponents:
+                if (
+                    exp.type == BathExponent.types['R'] or
+                    exp.type == BathExponent.types['RI']
+                ):
+                    coeff = exp.ck
+                if exp.type == BathExponent.types['I']:
+                    coeff = 1j * exp.ck
+                if exp.type == BathExponent.types['RI']:
+                    coeff += 1j * exp.ck2
+                coeff1=w-1j*exp.vk
+                coeff2=w1-1j*exp.vk
+                result+= coeff*np.sin(0.5*t*coeff1)*np.sin(0.5*t*coeff2)/(coeff1*coeff2)
+            return result*4*np.exp(0.5j*(w-w1))
         else:
             integrals = quad_vec(
                 self._γ,
@@ -131,65 +147,8 @@ class csolve:
                 quadrature="gk15"
             )[0]
             return t*t*integrals
-    def eigenbasis_decomposition(self):
-        if type(self.Hsys) != np.ndarray:
-            evals, all_state = self.Hsys.eigenstates()
-        else:
-            evals, all_state = np.linalg.eig(self.Hsys)
-            all_state = [i.reshape((len(i), 1)) for i in all_state]
-        for Q,bath in zip(self.Qs,self.baths):
-            print(len(self.baths))
-            N = len(all_state)
-            collapse_list = []
-            ws = []
-            for j in range(N):
-                for k in range(j + 1, N):
-                    Deltajk = evals[k] - evals[j]
-                    ws.append(Deltajk)
-                    if type(self.Hsys) != np.ndarray:
-                        collapse_list.append(
-                            (
-                                all_state[j]
-                                * all_state[j].dag()
-                                * Q
-                                * all_state[k]
-                                * all_state[k].dag()
-                            )
-                        )  # emission
-                        ws.append(-Deltajk)
-                        collapse_list.append(
-                            (
-                                all_state[k]
-                                * all_state[k].dag()
-                                * Q
-                                * all_state[j]
-                                * all_state[j].dag()
-                            )
-                        )  # absorption
-                    else:
-                        collapse_list.append(
-                            (
-                                all_state[j]
-                                @ np.conjugate(all_state[j]).T
-                                @ Q
-                                @ all_state[k]
-                                @ np.conjugate(all_state[k]).T
-                            )
-                        )  # emission
-                        ws.append(-Deltajk)
-                        collapse_list.append(
-                            (
-                                all_state[k]
-                                @ np.conjugate(all_state[k]).T
-                                @ Q
-                                @ all_state[j]
-                                @ np.conjugate(all_state[j]).T
-                            )
-                        )  # absorption
-            collapse_list.append(Q - sum(collapse_list))  # Dephasing
-            ws.append(0)
-            eldict = {ws[i]: collapse_list[i] for i in range(len(ws))}
-            return eldict
+            
+  
     def generator(self, approximated=False):
         if type(self.Hsys) != np.ndarray:
             evals, all_state = self.Hsys.eigenstates()
@@ -355,12 +314,10 @@ class csolve:
 
 
 # TODO Add Lamb-shift
-# TODO Measure times // Mix with numba/cython
+# TODO Measure times // Mix with numba/cython // speed integrals up
 # TODO pictures
 # TODO better naming
 # TODO explain regularization issues
 # TODO make result object
-# TODO Add support to for multiple baths (it can be done simply by calling
-# generators on the different baths and adding)
+# TODO refactor
 # TODO support Tensor Networks
-# TODO  get rid of useless integrals
