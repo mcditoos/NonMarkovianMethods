@@ -92,7 +92,7 @@ class csolve:
         )
         return var
 
-    def Γgen(self, bath ,w, w1, t, approximated=False, matsubara=False):
+    def Γgen(self, bath ,w, w1, t, approximated=False):
         r"""
         It describes the the decay rates of the cumulant equation
         for bosonic baths
@@ -120,22 +120,6 @@ class csolve:
         """
         if approximated:
             return self.γfa(bath,w, w1, t)
-        elif matsubara:
-            result=0
-            for exp in bath.exponents:
-                if (
-                    exp.type == BathExponent.types['R'] or
-                    exp.type == BathExponent.types['RI']
-                ):
-                    coeff = exp.ck
-                if exp.type == BathExponent.types['I']:
-                    coeff = 1j * exp.ck
-                if exp.type == BathExponent.types['RI']:
-                    coeff += 1j * exp.ck2
-                coeff1=w-1j*exp.vk
-                coeff2=w1-1j*exp.vk
-                result+= coeff*np.sin(0.5*t*coeff1)*np.sin(0.5*t*coeff2)/(coeff1*coeff2)
-            return result*4*np.exp(0.5j*(w-w1))
         else:
             integrals = quad_vec(
                 self._γ,
