@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from nmm import csolve,OhmicBath,OverdampedBath
+from nmm import csolve,OhmicBath
 
     
     

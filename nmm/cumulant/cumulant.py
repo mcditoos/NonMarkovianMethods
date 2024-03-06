@@ -10,7 +10,6 @@ except ModuleNotFoundError:
     from scipy.linalg import expm
 import itertools
 from collections import defaultdict
-from qutip.solver.heom import BathExponent
 
 class csolve:
     def __init__(self, Hsys, t, baths,Qs, eps=1e-4):
@@ -219,10 +218,19 @@ class csolve:
                 if (j in done) & (i != j):
                     rates[i] = np.conjugate(rates[j])
                 else:
-                    if (eldict[i[0]]==empty) or (eldict[i[1]]==empty):
-                        rates[i]=np.zeros(self.t.shape)
+                    if _qutip:
+                        if (eldict[i[0]]==empty) or (eldict[i[1]]==empty):
+                            rates[i]=np.zeros(self.t.shape)
+                        else:
+                            rates[i] = self.Γgen(bath,i[0], i[1], self.t,
+                                                 approximated)
                     else:
-                        rates[i] = self.Γgen(bath,i[0], i[1], self.t, approximated)
+                        if (eldict[i[0]]==empty).all() or (eldict[i[1]]==empty).all():
+                            rates[i]=np.zeros(self.t.shape)
+                        else:
+                            rates[i] = self.Γgen(bath,i[0], i[1], self.t,
+                                                 approximated)
+                            
 
             for i in tqdm(combinations, desc='Calculating the generator ...'):
                 decays.append(rates[i])
