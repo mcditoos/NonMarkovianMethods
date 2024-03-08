@@ -1,24 +1,21 @@
 import pytest
 import numpy as np
-from cumulant import csolve
-try:
-    from qutip import spre, spost, Qobj
-    _qutip = True
-except ModuleNotFoundError:
-    _qutip = False
-    from nmm.utils.utils import spre, spost
-""" 
+from nmm import csolve,OhmicBath,OverdampedBath
+
+    
+    
 
 @pytest.fixture
 def init():
     Hsys = np.array([[1, 0], [0, -1]])/2
     Q = np.array([[1, 0], [0, -1]])
-    lam = 0.05
+    alpha= 0.05
     gamma = 5
-    eps = 1e-6
     t = np.linspace(0, 1000, 10)
-    T = 1
-    obj = csolve(Hsys, t, eps, lam, gamma, T, Q, 'ohmic')
+    T=1
+    bath=OhmicBath(T,alpha,gamma)
+    obj = csolve(Hsys,t ,bath, Q)
+
     return obj
 
 
@@ -35,15 +32,15 @@ class TestCumulant:
                              [((1, 2, 3), (0.0628+0.8859j)),
                               ((1, 2, 0), 0 + 0j),
                               ((1.05, 0.095, 2), (0.3599 - 0.5087j))])
-    def test_γ_star(self, init, ars, expected):
-        assert np.isclose(init.γ_star(*ars), expected, atol=1e-3)
+    def test_γfa(self, init, ars, expected):
+        assert np.isclose(init.γfa(*ars), expected, atol=1e-3)
 
     @pytest.mark.parametrize("ars,expected",
                              [((1, 2, 3, 4), (0.0023 + 0.0051j)),
                               ((0, 0, 0, 5), 0 + 0j),
                               ((1.05, 0.095, 2, 1), (0.0433-0.0610j))])
     def test_γ(self, init, ars, expected):
-        assert np.isclose(init.γ(*ars), expected, atol=1e-3)
+        assert np.isclose(init._γ(*ars), expected, atol=1e-3)
 
     @pytest.mark.parametrize("ars,expected",
                              [((1, 1, 2), (0.7490)),
@@ -51,4 +48,3 @@ class TestCumulant:
                               ((-1, -1, 2), (0.3618))])
     def test_Γgen(self, init, ars, expected):
         assert np.isclose(init.Γgen(*ars), expected, atol=1e-3).all()
- """

@@ -270,13 +270,15 @@ class csolve:
         """
         self.generator(approximated)
         if _qutip:
-            return [i.expm()(rho0) for i in tqdm(self.generators,
+            states=[(i).expm()(rho0) for i in tqdm(self.generators,
                     desc='Computing Exponential of Generators . . . .')]
         else:
-            return [(expm(i)@(rho0.reshape(rho0.shape[0]**2)))
+            states=[(expm(i)@(rho0.reshape(rho0.shape[0]**2)))
                     .reshape(rho0.shape)
                     for i in tqdm(self.generators,
                     desc='Computing Exponential of Generators . . . .')]
+        return [(-1j*self.Hsys*self.t[i]).expm()*states[i]*
+                (1j*self.Hsys*self.t[i]).expm() for i in range(len(self.t))]
 
 
 # TODO Add Lamb-shift
