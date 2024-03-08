@@ -4,7 +4,7 @@
 
 This package has a a goal to collect some of the alternative approaches to open quantum systems into one package with unified notation
 
-for now it only supports the cumulant equation the documentation can be found in https://gsuarezr.github.io/NonMarkovianMethods/example_qutip/
+for now it only supports the cumulant equation the API documentation can be found in https://gsuarezr.github.io/NonMarkovianMethods/api/
 
 This is undergoing development and major changes are expected, if you find it useful and use it in your research please cite [ Dynamics of the Non-equilibrium spin Boson Model: A Benchmark of master equations and their validity ](https://arxiv.org/abs/2403.04488)
 
