@@ -1,2 +1,3 @@
 from .cumulant import csolve
-__all__ = [csolve]
+import cumulante
+__all__ = [csolve,cumulante]
