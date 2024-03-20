@@ -8,6 +8,7 @@ nmm.egg-info/dependency_links.txt
 nmm.egg-info/requires.txt
 nmm.egg-info/top_level.txt
 nmm/cumulant/__init__.py
+nmm/cumulant/cum.c
 nmm/cumulant/cumulant.py
 nmm/tests/__init__.py
 nmm/tests/conftest.py

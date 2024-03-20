@@ -1,8 +1,7 @@
-from setuptools import setup,find_packages
-from setuptools import Extension,setup
+from setuptools import find_packages
+from setuptools import setup
 from Cython.Build import cythonize
 
-extensions = [Extension("cumulant_cy", ["cumulant/_cumulant.pyx"])]
 
 setup(
     name='nmm',
@@ -10,9 +9,10 @@ setup(
     install_requires=[
         'numpy',
         'scipy; python_version > "3.6"',
+        'cython',
     ],
+    ext_modules=cythonize(["nmm/cumulant/cum.pyx"],include_path=["nmm/cumulant/"]),
     packages=find_packages(),
     extras_require={"Full": ['qutip']},
-    ext_modules=cythonize(extensions),
-
+    include_dirs=['']
 )
