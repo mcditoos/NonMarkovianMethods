@@ -38,11 +38,11 @@ class BosonicBath:
 
 
 class OhmicBath(BosonicBath):
-    def __init__(self, T, alpha, wc):
+    def __init__(self, T, coupling, cutoff):
         super().__init__(T)
-        self.alpha = alpha
-        self.wc = wc
-
+        self.coupling = coupling
+        self.cutoff = cutoff
+        self.label="ohmic"
     def spectral_density(self, w):
         r"""
         It describes the spectral density of an Ohmic spectral density given by
@@ -52,20 +52,21 @@ class OhmicBath(BosonicBath):
         Parameters
         ----------
         """
-        return self.alpha*w*np.exp(-abs(w)/self.wc)
+        return self.coupling*w*np.exp(-abs(w)/self.cutoff)
 
     def correlation_function(self, t):
         return None
 
 
 class OverdampedBath(BosonicBath):
-    def __init__(self, T, lam, gamma):
+    def __init__(self, T, coupling, cutoff):
         super().__init__(T)
-        self.lam = lam
-        self.gamma = gamma
-
+        self.coupling = coupling
+        self.cutoff = cutoff
+        self.label="overdamped"
+        self.params=np.array([coupling,cutoff],dtype=np.float32)
     def spectral_density(self, w):
-        return 2*self.lam*self.gamma*w/(self.gamma**2 + w**2)
+        return 2*self.coupling*self.cutoff*w/(self.cutoff**2 + w**2)
 
     def correlation_function(self, t):
         return None

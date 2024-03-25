@@ -12,6 +12,7 @@ nmm/cumulant/cum.c
 nmm/cumulant/cumulant.py
 nmm/tests/__init__.py
 nmm/tests/conftest.py
+nmm/tests/test_baths.py
 nmm/tests/test_cumulant.py
 nmm/utils/__init__.py
 nmm/utils/baths.py
