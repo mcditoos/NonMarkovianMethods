@@ -238,7 +238,6 @@ class csolve:
                             rates[i] = self.Γgen(bath,i[0], i[1], self.t,
                                                  approximated)
                             
-
             for i in tqdm(combinations, desc='Calculating the generator ...'):
                 decays.append(rates[i])
                 if _qutip is False:
@@ -320,4 +319,5 @@ class csolve:
 # TODO make result object
 # TODO refactor
 # TODO support Tensor Networks
+# TODO Refactoring in terms of the julia version will reduce the number of integrals and make great simplifications
 # REFORMAT THE Generator
