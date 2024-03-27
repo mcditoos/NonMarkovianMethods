@@ -1,17 +1,10 @@
 import numpy as np
 from scipy.integrate import quad_vec
 from tqdm import tqdm
-try:
-    from qutip import spre, spost, Qobj
-    _qutip = True
-except ModuleNotFoundError:
-    _qutip = False
-    from nmm.utils.utils import spre, spost
-    from scipy.linalg import expm
+from qutip import spre,spost,Qobj
 import itertools
 from collections import defaultdict
 from .cum import bath_csolve
-
 class csolve:
     def __init__(self, Hsys, t, baths,Qs, eps=1e-4,cython=True):
         self.Hsys = Hsys
@@ -137,146 +130,93 @@ class csolve:
                 quadrature="gk15"
             )[0]
             return t*t*integrals
-    
-    
-    ### This should be memoized and refactored
-    def generator(self, approximated=False):
-        if type(self.Hsys) != np.ndarray:
-            evals, all_state = self.Hsys.eigenstates()
-        else:
-            evals, all_state = np.linalg.eig(self.Hsys)
-            all_state = [i.reshape((len(i), 1)) for i in all_state]
-        generators=[]
+    def jump_operators(self,Q):
+        evals, all_state = self.Hsys.eigenstates()
         N=len(all_state)
-        for Q,bath in zip(self.Qs,self.baths):
-            collapse_list = []
-            ws = []
-            for j in range(N):
-                for k in range(j + 1, N):
-                    Deltajk = evals[k] - evals[j]
-                    ws.append(Deltajk)
-                    if type(self.Hsys) != np.ndarray:
-                        collapse_list.append(
-                            (
-                                all_state[j]
-                                * all_state[j].dag()
-                                * Q
-                                * all_state[k]
-                                * all_state[k].dag()
-                            )
-                        )  # emission
-                        ws.append(-Deltajk)
-                        collapse_list.append(
-                            (
-                                all_state[k]
-                                * all_state[k].dag()
-                                * Q
-                                * all_state[j]
-                                * all_state[j].dag()
-                            )
-                        )  # absorption
-                    else:
-                        collapse_list.append(
-                            (
-                                all_state[j]
-                                @ np.conjugate(all_state[j]).T
-                                @ Q
-                                @ all_state[k]
-                                @ np.conjugate(all_state[k]).T
-                            )
-                        )  # emission
-                        ws.append(Deltajk)
-                        collapse_list.append(
-                            (
-                                all_state[k]
-                                @ np.conjugate(all_state[k]).T
-                                @ Q
-                                @ all_state[j]
-                                @ np.conjugate(all_state[j]).T
-                            )
-                        )  # absorption
-            collapse_list.append(Q - sum(collapse_list))  # Dephasing
-            ws.append(0)
-            output = defaultdict(list)
-            for k,key in enumerate(ws):
-                output[key].append(collapse_list[k])
-            eldict={x:sum(y) for x, y in output.items()}
-            dictrem = {}
-            if _qutip:
-                empty = Qobj([[0]*N]*N)
-                for keys, values in eldict.items():
-                    if (values != empty):
-                        dictrem[keys] = values
+        collapse_list = []
+        ws = []
+        for j in range(N):
+            for k in range(j + 1, N):
+                Deltajk = evals[k] - evals[j]
+                ws.append(Deltajk)
+                collapse_list.append(
+                    (
+                        all_state[j]
+                        * all_state[j].dag()
+                        * Q
+                        * all_state[k]
+                        * all_state[k].dag()
+                    )
+                )  # emission
+                ws.append(-Deltajk)
+                collapse_list.append(
+                    (
+                        all_state[k]
+                        * all_state[k].dag()
+                        * Q
+                        * all_state[j]
+                        * all_state[j].dag()
+                    )
+                )  # absorption
+        collapse_list.append(Q - sum(collapse_list))  # Dephasing
+        ws.append(0)
+        output = defaultdict(list)
+        for k,key in enumerate(ws):
+            output[key].append(collapse_list[k])
+        eldict={x:sum(y) for x, y in output.items()}
+        dictrem = {}
+        empty = 0*Qobj(self.Hsys)
+        for keys, values in eldict.items():
+            if (values != empty):
+                dictrem[keys] = values
+        return dictrem
+        
+    def decays(self,combinations,bath,approximated):
+        rates = {}
+        done = []
+        for i in tqdm(combinations, desc='Calculating Integrals ...'):
+            done.append(i)
+            j = (i[1], i[0])
+            if (j in done) & (i != j):
+                rates[i] = np.conjugate(rates[j])
             else:
-                empty = np.array([[0]*N]*N)
-                for keys, values in eldict.items():
-                    if (values != empty).any():
-                        dictrem[keys] = values
-            ws = list(dictrem.keys())
-            eldict = dictrem
-            combinations = list(itertools.product(ws, ws))
-            decays = []
-            matrixform = []
-            rates = {}
-            done = []
-            for i in tqdm(combinations, desc='Calculating Integrals ...'):
-                done.append(i)
-                j = (i[1], i[0])
-                if (j in done) & (i != j):
-                    rates[i] = np.conjugate(rates[j])
-                else:
-                    if _qutip:
-                        if (eldict[i[0]]==empty) or (eldict[i[1]]==empty): # I should improve upon this and just skip these and drop from the combinations
-                            rates[i]=np.zeros(self.t.shape)
-                        else:
-                            rates[i] = self.Γgen(bath,i[0], i[1], self.t,
-                                                 approximated)
-                    else:
-                        if (eldict[i[0]]==empty).all() or (eldict[i[1]]==empty).all():
-                            rates[i]=np.zeros(self.t.shape)
-                        else:
-                            rates[i] = self.Γgen(bath,i[0], i[1], self.t,
-                                                 approximated)
-                            
-            for i in tqdm(combinations, desc='Calculating the generator ...'):
-                decays.append(rates[i])
-                if _qutip is False:
-                    matrixform.append(
-                        (spre(eldict[i[1]]) * spost(
-                            np.conjugate(eldict[i[0]]).T) -
-                        ((spre(np.conjugate(eldict[i[0]]).T @ eldict[i[1]]) +
-                        spost(np.conjugate(eldict[i[0]]).T @ eldict[i[1]])
-                        )*0.5)))
-                else:
-                    matrixform.append(
-                        (spre(eldict[i[1]]) * spost(eldict[i[0]].dag()) -
-                        (0.5 *
-                        (spre(eldict[i[0]].dag() * eldict[i[1]]) + spost(
-                            eldict[i[0]].dag() * eldict[i[1]])))))
-            ll = []
-            superop = []
+                rates[i] = self.Γgen(bath,i[0], i[1], self.t,
+                                                approximated)
+        return rates
+    
+    def matrix_form(self,jumps,combinations):   
+        matrixform={}       
+        for i in tqdm(combinations, desc='Calculating the generator Matrix ...'):
+                matrixform[i]=(spre(jumps[i[1]]) * spost(jumps[i[0]].dag()) 
+                               -(0.5 *(spre(jumps[i[0]].dag() * jumps[i[1]]) 
+                               + spost(jumps[i[0]].dag() * jumps[i[1]]))))
+        return matrixform
+    
+    def generator(self,approximated=False):
+        generators=[]
+        for Q,bath in zip(self.Qs,self.baths):
+            jumps=self.jump_operators(Q)
+            ws=list(jumps.keys())
+            combinations=list(itertools.product(ws, ws))
+            matrices=self.matrix_form(jumps,combinations)
+            decays=self.decays(combinations,bath,approximated)
+            superop=[]
             for l in range(len(self.t)):
-                if _qutip:
-                    ll = (matrixform[j]*decays[j][l]
-                        for j in range(len(combinations)))
-                    superop.append(sum(ll))
-                else:
-                    ll = (matrixform[j].right*decays[j][l]
-                        for j in range(len(combinations)))
-                    superop.append(sum(ll))
-                ll = []
+                gen = [matrices[i]*decays[i][l] for i in combinations]
+                superop.append(sum(gen))
             generators.extend(superop)
-        self.generators=self._reformat(generators)
+        return self._reformat(generators)
     
     def _reformat(self,generators):
         if len(generators)==len(self.t):
             return generators
         else:
-            one_list_for_each_bath=(generators[i*len(self.t):(i+1)*len(self.t)] 
+            one_list_for_each_bath=[generators[i*len(self.t):(i+1)*len(self.t)] 
                                     for i in 
-                                    range(0,int(len(generators)/len(self.t)) ))
+                                    range(0,int(len(generators)/len(self.t) ))]
             composed= list(map(sum, zip(*one_list_for_each_bath)))
             return composed
+        
     def evolution(self, rho0, approximated=False):
         r"""
         This function computes the evolution of the state $\rho(0)$
@@ -303,7 +243,7 @@ class csolve:
         self.generator(approximated)
         if _qutip:
             return [i.expm()(rho0) for i in tqdm(self.generators,
-                    desc='Computing Exponential of Generators . . . .')] # thic counts time incorrectly
+                    desc='Computing Exponential of Generators . . . .')] # this counts time incorrectly
         else:
             return [(expm(i)@(rho0.reshape(rho0.shape[0]**2)))
                     .reshape(rho0.shape)
@@ -312,12 +252,10 @@ class csolve:
 
 
 # TODO Add Lamb-shift
-# TODO Measure times // Mix with numba/cython // speed integrals up
 # TODO pictures
 # TODO better naming
 # TODO explain regularization issues
 # TODO make result object
-# TODO refactor
 # TODO support Tensor Networks
-# TODO Refactoring in terms of the julia version will reduce the number of integrals and make great simplifications
-# REFORMAT THE Generator
+# Benchmark with the QuatumToolbox,jl based version
+# Make it support pure numpy again
