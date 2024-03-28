@@ -8,6 +8,8 @@ setup(
     version='0.0.1',
     install_requires=[
         'numpy',
+        'jax',
+        'jax-lib',
         'scipy; python_version > "3.6"',
         'cython',
     ],

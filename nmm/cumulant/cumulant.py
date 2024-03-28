@@ -1,7 +1,13 @@
 import numpy as np
 from scipy.integrate import quad_vec
+import jax.numpy as jnp
 from tqdm import tqdm
-from qutip import spre,spost,Qobj
+try:
+    from qutip import spre, spost, Qobj
+    _qutip = True
+except ModuleNotFoundError:
+    _qutip = False
+    from nmm.utils.utils import spre, spost,Qobj
 import itertools
 from collections import defaultdict
 from .cum import bath_csolve
@@ -115,10 +121,12 @@ class csolve:
             with energies w and w1 at time t
 
         """
+        if isinstance(t,type(jnp.array([2]))):
+            t=np.array(t.tolist())
         if approximated:
             return self.γfa(bath,w, w1, t)
         if self.cython:
-                return bath.gamma(w,w1,t)
+                return bath.gamma(np.real(w),np.real(w1),t)
         else:
             integrals = quad_vec(
                 self._γ,
@@ -165,7 +173,10 @@ class csolve:
             output[key].append(collapse_list[k])
         eldict={x:sum(y) for x, y in output.items()}
         dictrem = {}
-        empty = 0*Qobj(self.Hsys)
+        if _qutip:
+            empty = 0*Qobj(self.Hsys)
+        else:
+            empty =0*self.Hsys
         for keys, values in eldict.items():
             if (values != empty):
                 dictrem[keys] = values
@@ -202,10 +213,13 @@ class csolve:
             decays=self.decays(combinations,bath,approximated)
             superop=[]
             for l in range(len(self.t)):
-                gen = [matrices[i]*decays[i][l] for i in combinations]
+                if _qutip or self.cython:
+                    gen = [matrices[i]*decays[i][l] for i in combinations]
+                else:
+                    gen = [matrices[i]*(decays[i][l]).item() for i in combinations]
                 superop.append(sum(gen))
             generators.extend(superop)
-        return self._reformat(generators)
+        self.generators=self._reformat(generators)
     
     def _reformat(self,generators):
         if len(generators)==len(self.t):
@@ -241,15 +255,8 @@ class csolve:
             the evolution
         """
         self.generator(approximated)
-        if _qutip:
-            return [i.expm()(rho0) for i in tqdm(self.generators,
+        return [i.expm()(rho0) for i in tqdm(self.generators,
                     desc='Computing Exponential of Generators . . . .')] # this counts time incorrectly
-        else:
-            return [(expm(i)@(rho0.reshape(rho0.shape[0]**2)))
-                    .reshape(rho0.shape)
-                    for i in tqdm(self.generators,
-                    desc='Computing Exponential of Generators . . . .')]
-
 
 # TODO Add Lamb-shift
 # TODO pictures
@@ -258,4 +265,5 @@ class csolve:
 # TODO make result object
 # TODO support Tensor Networks
 # Benchmark with the QuatumToolbox,jl based version
-# Make it support pure numpy again
+# TODO catch warning from scipy 
+# Habilitate double precision (Maybe single is good for now)
