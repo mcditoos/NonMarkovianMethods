@@ -2,20 +2,39 @@ import numpy as np
 from scipy.integrate import quad_vec
 import jax.numpy as jnp
 from tqdm import tqdm
-try:
-    from qutip import spre, spost, Qobj
-    _qutip = True
-except ModuleNotFoundError:
-    _qutip = False
-    from nmm.utils.utils import spre, spost,Qobj
+from qutip import spre as qutip_spre
+from qutip import spost as qutip_spost
+from qutip import Qobj as qutip_Qobj
+from nmm.utils.utils import spre as jax_spre
+from nmm.utils.utils import spost as jax_spost
+from nmm.utils.utils import Qobj as jax_Qobj
 import itertools
 from collections import defaultdict
 from .cum import bath_csolve
+from multipledispatch import dispatch
+
+@dispatch(qutip_Qobj)
+def spre(op):
+    return qutip_spre(op)
+@dispatch(qutip_Qobj)
+def spost(op):
+    return qutip_spost(op)
+
+@dispatch(jax_Qobj)
+def spre(op):
+    return jax_spre(op)
+@dispatch(jax_Qobj)
+def spost(op):
+    return jax_spost(op)
 class csolve:
     def __init__(self, Hsys, t, baths,Qs, eps=1e-4,cython=True):
         self.Hsys = Hsys
         self.t = t
         self.eps = eps
+        if isinstance(Hsys,qutip_Qobj):
+            self._qutip=True
+        else:
+            self._qutip=False
         if cython:
             self.baths= [bath_csolve(b.T,eps,b.coupling,b.cutoff,b.label) 
                          for b in baths]
@@ -173,10 +192,7 @@ class csolve:
             output[key].append(collapse_list[k])
         eldict={x:sum(y) for x, y in output.items()}
         dictrem = {}
-        if _qutip:
-            empty = 0*Qobj(self.Hsys)
-        else:
-            empty =0*self.Hsys
+        empty =0*self.Hsys
         for keys, values in eldict.items():
             if (values != empty):
                 dictrem[keys] = values
@@ -213,7 +229,7 @@ class csolve:
             decays=self.decays(combinations,bath,approximated)
             superop=[]
             for l in range(len(self.t)):
-                if _qutip or self.cython:
+                if self._qutip or self.cython:
                     gen = [matrices[i]*decays[i][l] for i in combinations]
                 else:
                     gen = [matrices[i]*(decays[i][l]).item() for i in combinations]
@@ -230,7 +246,6 @@ class csolve:
                                     range(0,int(len(generators)/len(self.t) ))]
             composed= list(map(sum, zip(*one_list_for_each_bath)))
             return composed
-        
     def evolution(self, rho0, approximated=False):
         r"""
         This function computes the evolution of the state $\rho(0)$
@@ -255,9 +270,9 @@ class csolve:
             the evolution
         """
         self.generator(approximated)
-        return [i.expm()(rho0) for i in tqdm(self.generators,
+        states=[i.expm()(rho0) for i in tqdm(self.generators,
                     desc='Computing Exponential of Generators . . . .')] # this counts time incorrectly
-
+        return states
 # TODO Add Lamb-shift
 # TODO pictures
 # TODO better naming

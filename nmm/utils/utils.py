@@ -69,7 +69,7 @@ class Qobj:
         return Qobj(other.__mul__(self))
     
     def expm(self):
-        return expm(self.data)
+        return Qobj(expm(self.data))
 class spre:
     def __init__(self, op,kron=True):
         if kron:

@@ -10,6 +10,7 @@ setup(
         'numpy',
         'jax',
         'jax-lib',
+        'multipledispatch',
         'scipy; python_version > "3.6"',
         'cython',
     ],
