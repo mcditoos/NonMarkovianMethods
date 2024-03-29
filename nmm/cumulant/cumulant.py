@@ -230,10 +230,13 @@ class csolve:
             superop=[]
             for l in range(len(self.t)):
                 if self._qutip or self.cython:
-                    gen = [matrices[i]*decays[i][l] for i in combinations]
+                    gen = (matrices[i]*decays[i][l] for i in combinations)
                 else:
-                    gen = [matrices[i]*(decays[i][l]).item() for i in combinations]
-                superop.append(sum(gen))
+                    gen = (matrices[i]*(decays[i][l]).item() for i in combinations)
+                ans=0
+                for j in gen:
+                    ans+=j
+                superop.append(ans)
             generators.extend(superop)
         self.generators=self._reformat(generators)
     

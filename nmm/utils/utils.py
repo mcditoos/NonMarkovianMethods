@@ -52,7 +52,7 @@ class Qobj:
         return self.__str__()
   
     def eigenstates(self):
-        eigvals,eigvecs=jnp.linalg.eig(self.data)
+        eigvals,eigvecs=jnp.linalg.eigh(self.data)
         eigvals=eigvals.tolist()
         eigvecs = [i.reshape((len(i), 1)) for i in eigvecs]
         eigvecs=[Qobj(i) for i in eigvecs]
