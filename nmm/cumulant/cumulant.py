@@ -189,7 +189,7 @@ class csolve:
         ws.append(0)
         output = defaultdict(list)
         for k,key in enumerate(ws):
-            output[key].append(collapse_list[k])
+            output[np.round(key,12)].append(collapse_list[k])
         eldict={x:sum(y) for x, y in output.items()}
         dictrem = {}
         empty =0*self.Hsys
