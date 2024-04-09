@@ -11,7 +11,7 @@ setup(
         'jax',
         'jax-lib',
         'multipledispatch',
-        'scipy; python_version > "3.6"',
+        'scipy; python_version > "3.7"',
         'cython',
     ],
     ext_modules=cythonize(["nmm/cumulant/cum.pyx"],include_path=["nmm/cumulant/"]),
