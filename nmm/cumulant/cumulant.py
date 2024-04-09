@@ -12,6 +12,7 @@ import itertools
 from collections import defaultdict
 from .cum import bath_csolve
 from multipledispatch import dispatch
+import warnings
 
 @dispatch(qutip_Qobj)
 def spre(op):
@@ -27,10 +28,11 @@ def spre(op):
 def spost(op):
     return jax_spost(op)
 class csolve:
-    def __init__(self, Hsys, t, baths,Qs, eps=1e-4,cython=True):
+    def __init__(self, Hsys, t, baths,Qs, eps=1e-4,cython=True,limit=50):
         self.Hsys = Hsys
         self.t = t
         self.eps = eps
+        self.limit=limit
         if isinstance(Hsys,qutip_Qobj):
             self._qutip=True
         else:
@@ -145,7 +147,7 @@ class csolve:
         if approximated:
             return self.γfa(bath,w, w1, t)
         if self.cython:
-                return bath.gamma(np.real(w),np.real(w1),t)
+            return bath.gamma(np.real(w),np.real(w1),t,limit=self.limit)
         else:
             integrals = quad_vec(
                 self._γ,
@@ -201,7 +203,7 @@ class csolve:
     def decays(self,combinations,bath,approximated):
         rates = {}
         done = []
-        for i in tqdm(combinations, desc='Calculating Integrals ...'):
+        for i in tqdm(combinations, desc='Calculating Integrals ...', dynamic_ncols=True):
             done.append(i)
             j = (i[1], i[0])
             if (j in done) & (i != j):
