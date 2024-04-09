@@ -17,5 +17,5 @@ setup(
     ext_modules=cythonize(["nmm/cumulant/cum.pyx"],include_path=["nmm/cumulant/"]),
     packages=find_packages(),
     extras_require={"Full": ['qutip']},
-    include_dirs=['']
+    include_dirs=['.']
 )
