@@ -2,7 +2,7 @@
 requires = ["setuptools>=61.0","cython",'numpy',
         'scipy; python_version > "3.7"',
         'jax',
-        'jax-lib',
+        'jaxlib',
         'multipledispatch',]
 build-backend = "setuptools.build_meta"
 

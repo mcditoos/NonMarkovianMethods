@@ -9,7 +9,7 @@ setup(
     install_requires=[
         'numpy',
         'jax',
-        'jax-lib',
+        'jaxlib',
         'multipledispatch',
         'scipy; python_version > "3.7"',
         'cython',
