@@ -7,7 +7,7 @@ numpy
 cython
 qutip
 tqdm
-jax-lib
+jaxlib
 multipledispatch
 
 
