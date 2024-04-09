@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=61.0","cython",'numpy',
-        'scipy; python_version > "3.6"',
+        'scipy; python_version > "3.7"',
         'jax',
         'jax-lib',
         'multipledispatch',]
