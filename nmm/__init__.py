@@ -1,2 +1,2 @@
-from .utils import *
-from .cumulant import *
+from nmm.utils import *
+from nmm.cumulant import *
