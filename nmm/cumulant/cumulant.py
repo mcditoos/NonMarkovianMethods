@@ -10,7 +10,7 @@ from nmm.utils.utils import spost as jax_spost
 from nmm.utils.utils import Qobj as jax_Qobj
 import itertools
 from collections import defaultdict
-from .cum import bath_csolve
+from nmm import bath_csolve
 from multipledispatch import dispatch
 import warnings
 
