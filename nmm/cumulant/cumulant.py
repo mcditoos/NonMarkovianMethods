@@ -235,10 +235,7 @@ class csolve:
                     gen = (matrices[i]*decays[i][l] for i in combinations)
                 else:
                     gen = (matrices[i]*(decays[i][l]).item() for i in combinations)
-                ans=0
-                for j in gen:
-                    ans+=j
-                superop.append(ans)
+                superop.append(sum(gen))
             generators.extend(superop)
         self.generators=self._reformat(generators)
     
