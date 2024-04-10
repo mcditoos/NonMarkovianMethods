@@ -62,7 +62,12 @@ class Qobj:
         if (isinstance(other,Number)):
             return Qobj(self.data*other)
         return Qobj(self.data @ other.data)
-    
+    def __truediv__(self,other):
+        if (isinstance(other,Number)):
+            return Qobj(self.data/other)
+        else:
+            raise NotImplementedError("Ill defined Operation")
+            
     def __rmul__(self,other):
         if (isinstance(other,Number)):
             return Qobj(self.data * other)

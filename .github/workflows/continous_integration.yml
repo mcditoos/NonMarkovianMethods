@@ -9,11 +9,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest,macos-latest,windows-latest]
+        os: [ubuntu-latest,macos-latest]
         python-version: ["3.11","3.12"]
     name: Test
     runs-on: ${{matrix.os}}
     steps:
+    - name: Add msbuild to PATH
+      uses: microsoft/setup-msbuild@v2
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Set up python

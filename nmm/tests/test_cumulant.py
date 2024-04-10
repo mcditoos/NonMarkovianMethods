@@ -3,19 +3,26 @@ import jax.numpy as jnp
 import numpy as np
 import nmm
     
-    
+sz=nmm.Qobj(jnp.array([[1, 0], [0, -1]]))
+sx=nmm.Qobj(jnp.array([[0, 1], [1, 0]]))
+sy=nmm.Qobj(jnp.array([[0, -1j], [0, 1j]]))
+sz2=nmm.Qobj(jnp.kron(jnp.array([[1, 0], [0, -1]]),jnp.array([[1, 0], [0, -1]])))
+sx2=nmm.Qobj(jnp.kron(jnp.identity(2),jnp.array([[0, 1], [1, 0]])))
+
+def commutator(A,B):
+    com=A*B-B*A
+    return com
 
 @pytest.fixture
 def init():
-    Hsys = jnp.array([[1, 0], [0, -1]])/2
-    Q = jnp.array([[1, 0], [0, -1]])
+    Hsys = sz/2
+    Q = sz
     alpha= 0.05
     gamma = 5
     t = np.linspace(0, 1000, 10)
     T=1
     bath=nmm.OhmicBath(T,alpha,gamma)
-    obj = nmm.cumulant.csolve(Hsys,t ,[bath], [Q])
-
+    obj = nmm.cumulant.csolve(Hsys,t ,[bath], [Q],cython=True)
     return obj
 
 
@@ -40,6 +47,17 @@ class TestCumulant:
                               ((-1, -1, [2]), (0.3618))])
     def test_Γgen(self, init, ars, expected):
         assert np.isclose(init.Γgen(init.baths[0],*ars), expected, atol=1e-3).all()
-
+    @pytest.mark.parametrize("Hsys,Q",[(sz,sx),(sz,sz),(sz,sz+sx),(sz2,sx2)])
+    def test_jump_operators(self,init,Hsys,Q):
+        init.Hsys=Hsys
+        jumps=init.jump_operators(Q)
+        if (commutator(init.Hsys,Q) == 0*init.Hsys):
+            assert len(jumps)==1
+            assert list(jumps.keys())[0]==0
+        else:
+            for key,value in jumps.items():
+                assert commutator(init.Hsys,value)==-key*value
+                assert commutator(init.Hsys,value.dag()*value)==0*value
+            
 
 # TODO REDESIGN TEST
