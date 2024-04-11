@@ -2,12 +2,18 @@ import pytest
 import jax.numpy as jnp
 import numpy as np
 import nmm
+import qutip as qt
     
 sz=nmm.Qobj(jnp.array([[1, 0], [0, -1]]))
 sx=nmm.Qobj(jnp.array([[0, 1], [1, 0]]))
 sy=nmm.Qobj(jnp.array([[0, -1j], [0, 1j]]))
-sz2=nmm.Qobj(jnp.kron(jnp.array([[1, 0], [0, -1]]),jnp.array([[1, 0], [0, -1]])))
-sx2=nmm.Qobj(jnp.kron(jnp.identity(2),jnp.array([[0, 1], [1, 0]])))
+H1   = qt.tensor(qt.sigmap()*qt.sigmam(), qt.identity(2))
+H2   = qt.tensor(qt.identity(2), qt.sigmap()*qt.sigmam())
+H12  = 0.25*(qt.tensor(qt.sigmap(), qt.sigmam()) + qt.tensor(qt.sigmam(), qt.sigmap()))
+Hsys = H1 + H2 + H12
+Q1 = qt.tensor(qt.sigmax(), qt.identity(2))
+#Hsys=nmm.Qobj(Hsys.full())
+#Q1=nmm.Qobj(Q1.full()) There is some problem with Qobj in jax
 
 def commutator(A,B):
     com=A*B-B*A
@@ -47,7 +53,7 @@ class TestCumulant:
                               ((-1, -1, [2]), (0.3618))])
     def test_Γgen(self, init, ars, expected):
         assert np.isclose(init.Γgen(init.baths[0],*ars), expected, atol=1e-3).all()
-    @pytest.mark.parametrize("Hsys,Q",[(sz,sx),(sz,sz),(sz,sz+sx),(sz2,sx2)])
+    @pytest.mark.parametrize("Hsys,Q",[(sz,sx),(sz,sz),(sz,sz+sx),(Hsys,Q1)])
     def test_jump_operators(self,init,Hsys,Q):
         init.Hsys=Hsys
         jumps=init.jump_operators(Q)
@@ -58,6 +64,5 @@ class TestCumulant:
             for key,value in jumps.items():
                 assert commutator(init.Hsys,value)==-key*value
                 assert commutator(init.Hsys,value.dag()*value)==0*value
-            
 
-# TODO REDESIGN TEST
+# TODO ADD CODECOV, Get better coverage
