@@ -14,8 +14,6 @@ jobs:
     name: Test
     runs-on: ${{matrix.os}}
     steps:
-    - name: Add msbuild to PATH
-      uses: microsoft/setup-msbuild@v2
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Set up python
@@ -27,6 +25,9 @@ jobs:
             python -m pip install pytest .
             python -m pip install -r requirements.txt
             python -m pip install -e .
-    - name: Run tests
-      run: pytest
+    - name: Upload coverage reports to Codecov
+      uses: codecov/codecov-action@v4.0.1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        slug: gsuarezr/NonMarkovianMethods
 

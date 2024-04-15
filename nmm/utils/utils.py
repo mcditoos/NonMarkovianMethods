@@ -34,15 +34,7 @@ class Qobj:
             return self
         else:
             return TypeError(f"Not Implemented for {type(other)}")
-
-    def __rsub__(self,other):
-        if isinstance(other,Qobj):
-            return Qobj(self.data-other.data)
-        if other==0:
-            return self
-        else:
-            return TypeError(f"Not Implemented for {type(other)}")
-
+        
     def dag(self):
         return Qobj(jnp.conjugate(jnp.transpose(self.data)))
     def __str__(self):
@@ -117,24 +109,23 @@ class spre:
             return spre(data,kron=False)
         else:
             return TypeError
-    def __rsub__(self,other):
-        if isinstance(other,(spre,spost)):
-            data =other.data -self.data
-            return spre(data,kron=False)
-        else:
-            return TypeError
+
     def __mul__(self, other):
         if type(other) in (int, float, complex, jnp.complex128):
             data =self.data* other
             return spre(data,kron=False)
-        data = self.data @ other.data
-        return spre(data,kron=False)
+
     def __rmul__(self,other):
         if type(other) in (int, float, complex, jnp.complex128):
             data =self.data* other
             return spre(data,kron=False)
-        data = other.data @ self.data
-        return spre(data,kron=False)
+
+    def __truediv__(self,other):
+        if (isinstance(other,Number)):
+            data=self.data/other
+            return spost(data,kron=False)
+        else:
+            raise NotImplementedError("Ill defined Operation")
     def expm(self):
         return spre(expm(self.data),kron=False)
 class spost:
@@ -178,23 +169,21 @@ class spost:
             return spost(data,kron=False)
         else:
             return TypeError
-    def __rsub__(self,other):
-        if isinstance(other,(spre,spost)):
-            data =other.data -self.data
+
+    def __truediv__(self,other):
+        if (isinstance(other,Number)):
+            data=self.data/other
             return spost(data,kron=False)
         else:
-            return TypeError
+            raise NotImplementedError("Ill defined Operation")
     def __mul__(self, other):
         if type(other) in (int, float, complex, jnp.complex128):
             data =self.data* other
             return spost(data,kron=False)
-        data = self.data @ other.data
-        return spost(data,kron=False)
+
     def __rmul__(self,other):
         if type(other) in (int, float, complex, jnp.complex128):
             data =self.data* other
             return spost(data,kron=False)
-        data = other.data @ self.data
-        return spost(data,kron=False)
     def expm(self):
         return spost(expm(self.data),kron=False)
