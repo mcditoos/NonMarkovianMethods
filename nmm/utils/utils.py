@@ -9,7 +9,7 @@ class Qobj:
         self.dtype=op.dtype
 
     def __eq__(self,other):
-        return jnp.array_equal(self.data,other.data).item()
+        return jnp.isclose(self.data,other.data).all().item()
 
     def __add__(self,other):
         if isinstance(other,Qobj):
@@ -42,6 +42,7 @@ class Qobj:
     def eigenstates(self):
         eigvals,eigvecs=jnp.linalg.eigh(self.data)
         eigvals=eigvals.tolist()
+        eigvecs = [eigvecs[:,i] for i in range(len(eigvecs))]
         eigvecs = [i.reshape((len(i), 1)) for i in eigvecs]
         eigvecs=[Qobj(i) for i in eigvecs]
         return eigvals,eigvecs
@@ -73,7 +74,7 @@ class spre:
         ## it may be worth using tensor contractions here (einsum)
         self.func = lambda x: Qobj((self.data@x.data.reshape(self.dim**2)).reshape(self.dim, self.dim))
     def __eq__(self,other):
-        return jnp.array_equal(self.data,other.data).item()
+        return jnp.isclose(self.data,other.data).all().item()
     def __str__(self):
         s=f"SuperOperator: \n {self.data}"
         return s
@@ -107,6 +108,8 @@ class spre:
         if type(other) in (int, float, complex, jnp.complex128):
             data =self.data* other
             return spre(data,kron=False)
+        data = self.data @ other.data
+        return spre(data,kron=False)
 
     def __rmul__(self,other):
         if type(other) in (int, float, complex, jnp.complex128):
@@ -133,7 +136,7 @@ class spost:
         ## it may be worth using tensor contractions here (einsum)
         self.func = lambda x: Qobj((self.data@x.data.reshape(self.dim**2)).reshape(self.dim, self.dim))
     def __eq__(self,other):
-        return jnp.array_equal(self.data,other.data).item()
+        return jnp.isclose(self.data,other.data).all().item()
     def __str__(self):
         s=f"SuperOperator: \n {self.data}"
         return s
@@ -173,6 +176,8 @@ class spost:
         if type(other) in (int, float, complex, jnp.complex128):
             data =self.data* other
             return spost(data,kron=False)
+        data = self.data @ other.data
+        return spre(data,kron=False)
 
     def __rmul__(self,other):
         if type(other) in (int, float, complex, jnp.complex128):

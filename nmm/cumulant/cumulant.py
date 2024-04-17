@@ -219,7 +219,7 @@ class csolve:
         matrixform={}       
         for i in tqdm(combinations, desc='Calculating the generator Matrix ...'):
                 matrixform[i]= (spre(jumps[i[1]]) * spost(jumps[i[0]].dag()) 
-                               -(0.5 *(spre(jumps[i[0]].dag() * jumps[i[1]]) 
+                                -1*(0.5 *(spre(jumps[i[0]].dag() * jumps[i[1]]) 
                                + spost(jumps[i[0]].dag() * jumps[i[1]]))))
         return matrixform
     
@@ -234,11 +234,14 @@ class csolve:
             superop=[]
             for l in tqdm(range(len(self.t)),"Calculating time dependent generators ..."):
                 if self._qutip or self.cython:
-                    gen = [matrices[i]*decays[i][l] for i in combinations]
+                    gen = (matrices[i]*decays[i][l] for i in combinations)
                 else:
-                    gen = [matrices[i]*(decays[i][l]).item() for i in combinations]
+                    gen = (matrices[i]*(decays[i][l]).item() for i in combinations)
                 superop.append(sum(gen))
             generators.extend(superop)
+            del gen
+            del matrices
+            del decays
         self.generators=self._reformat(generators)
     
     def _reformat(self,generators):
