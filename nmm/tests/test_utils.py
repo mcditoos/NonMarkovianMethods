@@ -30,9 +30,23 @@ class TestQobj:
         assert jnp.isclose((qobj2*qobj1).data,qobj1.data@qobj2.data).all()
         assert jnp.isclose((qobj2+0).data,qobj2.data).all()
         assert jnp.isclose((qobj2-0).data,qobj2.data).all()
+        assert jnp.isclose((0+qobj2).data,qobj2.data).all()
+        assert jnp.isclose((0-qobj2).data,-qobj2.data).all()
         assert jnp.isclose((qobj2/2).data,qobj2.data/2).all()
+        with pytest.raises(TypeError) as e_info:
+            qobj1+1
+        with pytest.raises(TypeError) as e_info:
+            1+qobj1
+        with pytest.raises(TypeError) as e_info:
+            qobj1-1
+        with pytest.raises(TypeError) as e_info:
+            1-qobj1
+    @pytest.mark.parametrize("dims",range(1,20,5))
+    def test_expm(self,dims):
+        qobj1=nmm.Qobj(random.normal(key,[dims,dims]))
+        assert jnp.isclose(qobj1.expm().data,jax.scipy.linalg.expm(qobj1.data)).all()
         
-        
+    
 class TestSuperop:
     @pytest.mark.parametrize("dims",range(1,20,5))
     def test_spre(self,dims):
@@ -50,6 +64,9 @@ class TestSuperop:
             spre(qobj1)/qobj2
         op1=spre(qobj1)+spre(qobj2)
         assert jnp.isclose((op1(qobj2)).data,(qobj1.data+qobj2.data)@qobj2.data).all()  
+        #assert (spre(qobj1)==spre(qobj2))==False
+        assert (spre(qobj1)==spre(qobj1))==True
+        
     @pytest.mark.parametrize("dims",range(1,20,5))
     def test_spost(self,dims):
         qobj1=nmm.Qobj(random.normal(key,[dims,dims],dtype=jnp.float64))

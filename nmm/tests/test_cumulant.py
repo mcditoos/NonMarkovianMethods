@@ -3,17 +3,18 @@ import jax.numpy as jnp
 import numpy as np
 import nmm
 import qutip as qt
-    
-sz=nmm.Qobj(jnp.array([[1, 0], [0, -1]]))
-sx=nmm.Qobj(jnp.array([[0, 1], [1, 0]]))
-sy=nmm.Qobj(jnp.array([[0, -1j], [0, 1j]]))
+import jax
+jax.config.update("jax_enable_x64", True)
+sz=nmm.Qobj(jnp.array([[1, 0], [0, -1]],dtype=jnp.complex128))
+sx=nmm.Qobj(jnp.array([[0, 1], [1, 0]],dtype=jnp.complex128))
+sy=nmm.Qobj(jnp.array([[0, -1j], [0, 1j]],dtype=jnp.complex128))
 H1   = qt.tensor(qt.sigmap()*qt.sigmam(), qt.identity(2))
 H2   = qt.tensor(qt.identity(2), qt.sigmap()*qt.sigmam())
 H12  = 0.25*(qt.tensor(qt.sigmap(), qt.sigmam()) + qt.tensor(qt.sigmam(), qt.sigmap()))
 Hsys = H1 + H2 + H12
 Q1 = qt.tensor(qt.sigmax(), qt.identity(2))
-#Hsys=nmm.Qobj(Hsys.full())
-#Q1=nmm.Qobj(Q1.full()) There is some problem with Qobj in jax
+Hsys=nmm.Qobj(jnp.array(Hsys.full(),dtype=jnp.complex128))
+Q1=nmm.Qobj(jnp.array(Q1.full(),dtype=jnp.complex128)) 
 
 def commutator(A,B):
     com=A*B-B*A
@@ -30,7 +31,17 @@ def init():
     bath=nmm.OhmicBath(T,alpha,gamma)
     obj = nmm.cumulant.csolve(Hsys,t ,[bath], [Q],cython=True)
     return obj
-
+@pytest.fixture
+def init_jax():
+    Hsys = sz/2
+    Q = sz
+    alpha= 0.05
+    gamma = 5
+    t = np.linspace(0, 1000, 10)
+    T=1
+    bath=nmm.OhmicBath(T,alpha,gamma)
+    obj = nmm.cumulant.csolve(Hsys,t ,[bath], [Q],cython=True)
+    return obj
 
 class TestCumulant:
     @pytest.mark.parametrize("ars,expected",
@@ -62,8 +73,5 @@ class TestCumulant:
             assert list(jumps.keys())[0]==0
         else:
             for key,value in jumps.items():
-                assert commutator(init.Hsys,value)==-key*value
+                assert jnp.isclose(commutator(init.Hsys,value).data,(-key*value).data).all()
                 assert commutator(init.Hsys,value.dag()*value)==0*value
-
-        
-# TODO ADD CODECOV, Get better coverage
