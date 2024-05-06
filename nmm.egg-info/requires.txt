@@ -1,3 +1,11 @@
+numpy
+jax
+jaxlib
+multipledispatch
+cython
+
+[:python_version > "3.7"]
+scipy
 
 [Full]
 qutip

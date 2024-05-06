@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 from jax.scipy.linalg import expm
 from numbers import Number
+from flax import struct
 
 class Qobj:
     def __init__(self,op):

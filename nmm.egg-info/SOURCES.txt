@@ -10,10 +10,13 @@ nmm.egg-info/top_level.txt
 nmm/cumulant/__init__.py
 nmm/cumulant/cum.c
 nmm/cumulant/cumulant.py
+nmm/redfield/__init__.py
+nmm/redfield/redfield.py
 nmm/tests/__init__.py
 nmm/tests/conftest.py
 nmm/tests/test_baths.py
 nmm/tests/test_cumulant.py
+nmm/tests/test_utils.py
 nmm/utils/__init__.py
 nmm/utils/baths.py
 nmm/utils/utils.py

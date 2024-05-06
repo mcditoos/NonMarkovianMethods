@@ -176,7 +176,7 @@ class redfield:
     
     def generator(self,t):
         if t==0:
-            return (spre(self.Qs[0])*0).data
+            return (spre(self.Qs[0])*0)
         generators=[]
         for Q,bath in zip(self.Qs,self.baths):
             jumps=self.jump_operators(Q)
@@ -194,7 +194,7 @@ class redfield:
             del gen
             del matrices
             del decays
-        return sum(generators).data
+        return sum(generators)
     
     def evolution(self,rho0):
         r"""
@@ -219,10 +219,18 @@ class redfield:
             a list containing all of the density matrices, at all timesteps of
             the evolution
         """
-        f=lambda t,y: np.array(self.generator(t))@np.array(y) #maybe this can
         #be easility jitted
-        y0=rho0.data.flatten()
-        y0=np.array(y0).astype(np.complex128)
+        try:
+            y0=rho0.data.flatten()
+            y0=np.array(y0).astype(np.complex128)
+            f=lambda t,y: np.array(self.generator(t).data)@np.array(y) #maybe this can
+
+        except:
+            y0=rho0.full().flatten()
+            y0=np.array(y0).astype(np.complex128)
+            f=lambda t,y: self.generator(t).full()@np.array(y) #maybe this can
+
+            
         result = solve_ivp(f, [0, self.t[-1]],
                    y0,
                    t_eval=self.t,method="BDF",verbose=True)
