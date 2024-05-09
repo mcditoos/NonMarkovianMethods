@@ -196,7 +196,7 @@ class redfield:
             del decays
         return sum(generators)
     
-    def evolution(self,rho0):
+    def evolution(self,rho0,method="BDF"):
         r"""
         This function computes the evolution of the state $\rho(0)$
 
@@ -233,7 +233,7 @@ class redfield:
             
         result = solve_ivp(f, [0, self.t[-1]],
                    y0,
-                   t_eval=self.t,method="BDF",verbose=True)
+                   t_eval=self.t,method=method)
         return result
 # TODO Add Lamb-shift
 # TODO pictures

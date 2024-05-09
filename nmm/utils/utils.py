@@ -1,13 +1,21 @@
 import jax.numpy as jnp
 from jax.scipy.linalg import expm
 from numbers import Number
-from flax import struct
+from jax import  tree_util
+
 
 class Qobj:
-    def __init__(self,op):
+    def __init__(self,op:jnp.array):
         self.data=op
         self.shape=op.shape
         self.dtype=op.dtype
+    def _tree_flatten(self):
+        children=(self.data,)
+        aux_data={}
+        return (children,aux_data)
+    @classmethod
+    def _tree_unflatten(cls,aux_data,children):
+        return cls(*children,**aux_data)
 
     def __eq__(self,other):
         return jnp.isclose(self.data,other.data).all().item()
@@ -65,6 +73,7 @@ class Qobj:
         return Qobj(expm(self.data))
 class spre:
     def __init__(self, op,kron=True):
+        self.kron=kron
         if kron:
             op=op.data
             self.data = jnp.kron(op, jnp.eye(op.shape[0]))
@@ -74,6 +83,13 @@ class spre:
             self.dim = int(op.shape[0]**0.5)
         ## it may be worth using tensor contractions here (einsum)
         self.func = lambda x: Qobj((self.data@x.data.reshape(self.dim**2)).reshape(self.dim, self.dim))
+    def _tree_flatten(self):
+        children=(self.data,)
+        aux_data={"kron":self.kron}
+        return (children,aux_data)
+    @classmethod
+    def _tree_unflatten(cls,aux_data,children):
+        return cls(*children,**aux_data)
     def __eq__(self,other):
         return jnp.isclose(self.data,other.data).all().item()
     def __str__(self):
@@ -135,7 +151,14 @@ class spost:
             self.data=op
             self.dim = int(op.shape[0]**0.5)
         ## it may be worth using tensor contractions here (einsum)
-        self.func = lambda x: Qobj((self.data@x.data.reshape(self.dim**2)).reshape(self.dim, self.dim))
+        self.func = lambda x: Qobj((self.data@x.data.reshape(self.dim**2)).reshape(self.dim, self.dim))  
+    def _tree_flatten(self):
+        children=(self.data,)
+        aux_data={"kron":self.kron}
+        return (children,aux_data)
+    @classmethod
+    def _tree_unflatten(cls,aux_data,children):
+        return cls(*children,**aux_data)
     def __eq__(self,other):
         return jnp.isclose(self.data,other.data).all().item()
     def __str__(self):
@@ -186,3 +209,16 @@ class spost:
             return spost(data,kron=False)
     def expm(self):
         return spost(expm(self.data),kron=False)
+    
+tree_util.register_pytree_node(
+    Qobj,
+    Qobj._tree_flatten,
+    Qobj._tree_unflatten)
+tree_util.register_pytree_node(
+    spre,
+    spre._tree_flatten,
+    spre._tree_unflatten)
+tree_util.register_pytree_node(
+    spost,
+    spost._tree_flatten,
+    spost._tree_unflatten)

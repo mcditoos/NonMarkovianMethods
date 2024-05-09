@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.integrate import quad_vec
 import jax.numpy as jnp
+from jax import jit
 from tqdm import tqdm
 from qutip import spre as qutip_spre
 from qutip import spost as qutip_spost
@@ -161,6 +162,7 @@ class csolve:
                 quadrature="gk15"
             )[0]
             return t*t*integrals
+    @jit
     def jump_operators(self,Q):
         evals, all_state = self.Hsys.eigenstates()
         N=len(all_state)
@@ -214,7 +216,7 @@ class csolve:
                 rates[i] = self.Γgen(bath,i[0], i[1], self.t,
                                                 approximated)
         return rates
-    
+    @jit
     def matrix_form(self,jumps,combinations):   
         matrixform={}       
         for i in tqdm(combinations, desc='Calculating the generator Matrix ...'):
