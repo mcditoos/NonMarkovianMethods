@@ -14,6 +14,8 @@ from collections import defaultdict
 from nmm.cumulant.cum import bath_csolve
 from multipledispatch import dispatch
 import warnings
+from jax import  tree_util
+
 
 @dispatch(qutip_Qobj)
 def spre(op):
@@ -36,6 +38,8 @@ class csolve:
         self.t = t
         self.eps = eps
         self.limit=limit
+        self.dtype = Hsys.dtype
+        
         if isinstance(Hsys,qutip_Qobj):
             self._qutip=True
         else:
@@ -47,6 +51,13 @@ class csolve:
             self.baths=baths
         self.Qs = Qs
         self.cython=cython
+    def _tree_flatten(self):
+        children=(self.Hsys,self.t,self.eps,self.limit,self.baths,self.dtype)
+        aux_data={}
+        return (children,aux_data)
+    @classmethod
+    def _tree_unflatten(cls,aux_data,children):
+        return cls(*children,**aux_data)
     def γfa(self,bath, w, w1, t):
         r"""
         It describes the decay rates for the Filtered Approximation of the
@@ -162,7 +173,6 @@ class csolve:
                 quadrature="gk15"
             )[0]
             return t*t*integrals
-    @jit
     def jump_operators(self,Q):
         evals, all_state = self.Hsys.eigenstates()
         N=len(all_state)
@@ -282,6 +292,11 @@ class csolve:
         states=[i.expm()(rho0) for i in tqdm(self.generators,
                     desc='Computing Exponential of Generators . . . .')] # this counts time incorrectly
         return states
+    
+tree_util.register_pytree_node(
+    csolve,
+    csolve._tree_flatten,
+    csolve._tree_unflatten)
 # TODO Add Lamb-shift
 # TODO pictures
 # TODO better naming
