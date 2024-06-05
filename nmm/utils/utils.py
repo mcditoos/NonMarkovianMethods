@@ -16,10 +16,8 @@ class Qobj:
     @classmethod
     def _tree_unflatten(cls,aux_data,children):
         return cls(*children,**aux_data)
-    @jit
     def __eq__(self,other):
         return jnp.isclose(self.data,other.data).all().item()
-    @jit
     def __add__(self,other):
         if isinstance(other,Qobj):
             return Qobj(self.data+other.data)
@@ -27,10 +25,8 @@ class Qobj:
             return self
         else:
             raise TypeError(f"Not Implemented for {type(other)}")
-    @jit
     def __radd__(self,other):
         return self.__add__(other)
-    @jit
     def __sub__(self,other):
         if isinstance(other,Qobj):
             return Qobj(self.data-other.data)
@@ -47,10 +43,10 @@ class Qobj:
         return s
     def __repr__(self):
         return self.__str__()
-    @jit
+    
     def eigenstates(self):
         eigvals,eigvecs=jnp.linalg.eigh(self.data)
-        eigvals=eigvals.tolist()
+        eigvals=eigvals
         eigvecs = [eigvecs[:,i] for i in range(len(eigvecs))]
         eigvecs = [i.reshape((len(i), 1)) for i in eigvecs]
         eigvecs=[Qobj(i) for i in eigvecs]

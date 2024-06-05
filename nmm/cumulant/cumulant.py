@@ -33,12 +33,14 @@ def spost(op):
 
 
 class csolve:
-    def __init__(self, Hsys, t, baths,Qs, eps=1e-4,cython=True,limit=50):
+    def __init__(self, Hsys, t, baths,Qs, eps=1e-4,cython=True,limit=50,
+                 matsubara=False):
         self.Hsys = Hsys
         self.t = t
         self.eps = eps
         self.limit=limit
         self.dtype = Hsys.dtype
+        
         
         if isinstance(Hsys,qutip_Qobj):
             self._qutip=True
@@ -51,6 +53,7 @@ class csolve:
             self.baths=baths
         self.Qs = Qs
         self.cython=cython
+        self.matsubara=matsubara
     def _tree_flatten(self):
         children=(self.Hsys,self.t,self.eps,self.limit,self.baths,self.dtype)
         aux_data={}
@@ -58,7 +61,7 @@ class csolve:
     @classmethod
     def _tree_unflatten(cls,aux_data,children):
         return cls(*children,**aux_data)
-    def γfa(self,bath, w, w1, t):
+    def gamma_fa(self,bath, w, w1, t):
         r"""
         It describes the decay rates for the Filtered Approximation of the
         cumulant equation
@@ -90,7 +93,7 @@ class csolve:
                * np.sqrt(bath.spectral_density(w) * (bath.bose(w) + 1)))
         return var
 
-    def _γ(self, ν,bath, w, w1, t):
+    def _gamma_(self, ν,bath, w, w1, t):
         r"""
         It describes the Integrand of the decay rates of the cumulant equation
         for bosonic baths
@@ -130,7 +133,7 @@ class csolve:
         )
         return var
 
-    def Γgen(self, bath ,w, w1, t, approximated=False):
+    def gamma_gen(self, bath ,w, w1, t, approximated=False):
         r"""
         It describes the the decay rates of the cumulant equation
         for bosonic baths
@@ -159,12 +162,18 @@ class csolve:
         if isinstance(t,type(jnp.array([2]))):
             t=np.array(t.tolist())
         if approximated:
-            return self.γfa(bath,w, w1, t)
+            return self.gamma_fa(bath,w, w1, t)
+        if self.matsubara:
+            if w==w1:
+                return np.array([sum(self.decayww(bath,w,t,i)) for i in range(1000)])
+            else:
+                return  np.array([sum(self.decayww2(bath,w,w1,t,i)) for i in range(1000)])
         if self.cython:
             return bath.gamma(np.real(w),np.real(w1),t,limit=self.limit)
+
         else:
             integrals = quad_vec(
-                self._γ,
+                self._gamma_,
                 0,
                 np.Inf,
                 args=(bath,w, w1, t),
@@ -205,7 +214,7 @@ class csolve:
         ws.append(0)
         output = defaultdict(list)
         for k,key in enumerate(ws):
-            output[np.round(key,12)].append(collapse_list[k])
+            output[jnp.round(key,12).item()].append(collapse_list[k])
         eldict={x:sum(y) for x, y in output.items()}
         dictrem = {}
         empty =0*self.Hsys
@@ -223,10 +232,9 @@ class csolve:
             if (j in done) & (i != j):
                 rates[i] = np.conjugate(rates[j])
             else:
-                rates[i] = self.Γgen(bath,i[0], i[1], self.t,
+                rates[i] = self.gamma_gen(bath,i[0], i[1], self.t,
                                                 approximated)
         return rates
-    @jit
     def matrix_form(self,jumps,combinations):   
         matrixform={}       
         for i in tqdm(combinations, desc='Calculating the generator Matrix ...'):
@@ -292,6 +300,20 @@ class csolve:
         states=[i.expm()(rho0) for i in tqdm(self.generators,
                     desc='Computing Exponential of Generators . . . .')] # this counts time incorrectly
         return states
+    def decayww(self,bath,w,t,k=1000):
+        decay1=-(1j*bath.ckr(k)+bath.cki(k))*(1j-1j*np.exp(-t*(1j*w+bath.vk(k)))+t*(w-1j*bath.vk(k)))
+        decay1=decay1/(w-1j*bath.vk(k))**2
+        return 2*np.real(decay1)*np.pi
+    def decayww2(self,bath,w,w1,t,k=1000):
+        mul1=(1j*bath.ckr(k)+bath.cki(k))/(w1-1j*bath.vk(k))
+        tem1=(np.exp(1j*t*(w-w1))-np.exp(-bath.vk(k)*t-1j*w1*t))/(bath.vk(k)+1j*w)
+        tem2=1j*(np.exp(1j*(w-w1)*t)-1)/(w-w1)
+        first=mul1*(tem1+tem2)
+        mul2=-(bath.ckr(k)+1j*bath.cki(k))*(1j*bath.vk(k)+(w-w1)*np.exp(-bath.vk(k)*t+1j*t*w)-
+                (w+1j*bath.vk(k))*np.exp(1j*t*(w-w1))+w1)
+        div2=(w+1j*bath.vk(k))*(w-w1)*(w1+1j*bath.vk(k))
+        secod=mul2/div2
+        return (first+secod)*np.pi
     
 tree_util.register_pytree_node(
     csolve,

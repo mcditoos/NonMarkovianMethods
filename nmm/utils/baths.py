@@ -1,5 +1,5 @@
 import numpy as np
-
+import jax.numpy as jnp
 
 class BosonicBath:
     def __init__(self, T):
@@ -68,8 +68,34 @@ class OverdampedBath(BosonicBath):
     def spectral_density(self, w):
         return 2*self.coupling*self.cutoff*w/(self.cutoff**2 + w**2)
 
-    def correlation_function(self, t):
-        return None
+    def vkr(self,k):
+        if k==0:
+            return self.cutoff
+        else:
+            return 2*np.pi*k*self.T
+    def ckr(self,k):
+        c,d=self.coupling,self.cutoff
+        if k==0:
+            return c*d/np.tan(d/(2*self.T))
+        else:
+            vk=self.vkr(k)
+            return 4*c*d*vk*self.T/(vk**2 - d**2)
+    def vki(self,k):
+        if k==0:
+            return self.cutoff
+        else:
+            return 0
+    def vk(self,k):
+        return self.vkr(k)+1j*self.vki(k)
+    def cki(k,bath):
+        if k==0:
+            return -bath.coupling*bath.cutoff
+        else: 
+            return 0
+
+    def correlation_function(self, t,k=1000):
+        return (self.ckr(k)+1j*self.cki(k))*np.exp(-(self.vkr(k)
+                                                     +1j*self.vki(k))*t)
 
 
 class UnderdampedBath(BosonicBath):
