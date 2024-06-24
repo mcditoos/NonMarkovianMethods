@@ -1,5 +1,6 @@
-import numpy as np
 import jax.numpy as jnp
+import numpy as np
+from jax import jit
 
 class BosonicBath:
     def __init__(self, T):
@@ -64,38 +65,36 @@ class OverdampedBath(BosonicBath):
         self.coupling = coupling
         self.cutoff = cutoff
         self.label="overdamped"
-        self.params=np.array([coupling,cutoff],dtype=np.float32)
+        self.params=np.array([coupling,cutoff],dtype=np.float64)
     def spectral_density(self, w):
         return 2*self.coupling*self.cutoff*w/(self.cutoff**2 + w**2)
-
-    def vkr(self,k):
+    def _vk(self,k):
         if k==0:
             return self.cutoff
         else:
             return 2*np.pi*k*self.T
-    def ckr(self,k):
+    def _ckr(self,k):
         c,d=self.coupling,self.cutoff
         if k==0:
             return c*d/np.tan(d/(2*self.T))
         else:
-            vk=self.vkr(k)
+            vk=self._vk(k)
             return 4*c*d*vk*self.T/(vk**2 - d**2)
-    def vki(self,k):
-        if k==0:
-            return self.cutoff
-        else:
-            return 0
     def vk(self,k):
-        return self.vkr(k)+1j*self.vki(k)
-    def cki(k,bath):
+        return np.array([self._vk(i) for i in range(k)])
+    def _cki(self,k):
         if k==0:
-            return -bath.coupling*bath.cutoff
+            return -self.coupling*self.cutoff
         else: 
             return 0
-
-    def correlation_function(self, t,k=1000):
-        return (self.ckr(k)+1j*self.cki(k))*np.exp(-(self.vkr(k)
-                                                     +1j*self.vki(k))*t)
+    def ckr(self,k):
+        return np.array([self._ckr(i) for i in range(k)])
+    def cki(self,k):
+        return np.array([self._cki(i) for i in range(k)])
+    def correlation_function(self, t,n=1000):
+        return (self.ckr(n)+1j*self.cki(n))*np.exp(-(self.vkr(n)
+                                                     +1j*self.vki(n))*t)
+               
 
 
 class UnderdampedBath(BosonicBath):

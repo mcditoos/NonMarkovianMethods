@@ -165,9 +165,9 @@ class csolve:
             return self.gamma_fa(bath,w, w1, t)
         if self.matsubara:
             if w==w1:
-                return np.array([sum(self.decayww(bath,w,t,i)) for i in range(1000)])
+                return self.decayww(bath,w,t)
             else:
-                return  np.array([sum(self.decayww2(bath,w,w1,t,i)) for i in range(1000)])
+                return self.decayww2(bath,w,w1,t)
         if self.cython:
             return bath.gamma(np.real(w),np.real(w1),t,limit=self.limit)
 
@@ -300,11 +300,13 @@ class csolve:
         states=[i.expm()(rho0) for i in tqdm(self.generators,
                     desc='Computing Exponential of Generators . . . .')] # this counts time incorrectly
         return states
-    def decayww(self,bath,w,t,k=1000):
+    
+
+    def _decayww(self,bath,w,t,k=1000):
         decay1=-(1j*bath.ckr(k)+bath.cki(k))*(1j-1j*np.exp(-t*(1j*w+bath.vk(k)))+t*(w-1j*bath.vk(k)))
         decay1=decay1/(w-1j*bath.vk(k))**2
         return 2*np.real(decay1)*np.pi
-    def decayww2(self,bath,w,w1,t,k=1000):
+    def _decayww2(self,bath,w,w1,t,k=1000):
         mul1=(1j*bath.ckr(k)+bath.cki(k))/(w1-1j*bath.vk(k))
         tem1=(np.exp(1j*t*(w-w1))-np.exp(-bath.vk(k)*t-1j*w1*t))/(bath.vk(k)+1j*w)
         tem2=1j*(np.exp(1j*(w-w1)*t)-1)/(w-w1)
@@ -314,6 +316,10 @@ class csolve:
         div2=(w+1j*bath.vk(k))*(w-w1)*(w1+1j*bath.vk(k))
         secod=mul2/div2
         return (first+secod)*np.pi
+    def decayww2(self,bath,w,w1,t,k=1000):
+        return np.array([np.sum(self._decayww2(bath,w,w1,i,k)) for i in t])
+    def decayww(self,bath,w,t,k=1000):
+        return np.array([np.sum(self._decayww(bath,w,i,k)) for i in t])
     
 tree_util.register_pytree_node(
     csolve,

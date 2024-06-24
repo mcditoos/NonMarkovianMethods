@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.integrate import quad_vec
 import jax.numpy as jnp
+from jax import jit
+from tqdm import tqdm
 from qutip import spre as qutip_spre
 from qutip import spost as qutip_spost
 from qutip import Qobj as qutip_Qobj
@@ -12,8 +14,8 @@ from collections import defaultdict
 from nmm.cumulant.cum import bath_csolve
 from multipledispatch import dispatch
 import warnings
-from scipy.integrate import solve_ivp
 from jax import  tree_util
+from scipy.integrate import solve_ivp
 
 
 @dispatch(qutip_Qobj)
@@ -31,17 +33,27 @@ def spost(op):
     return jax_spost(op)
 
 
-class redfield:
-    def __init__(self, Hsys, t, baths,Qs, eps=1e-4,matsubara=True):
+class crsolve:
+    def __init__(self, Hsys, t, baths,Qs, eps=1e-4,cython=True,limit=50,
+                 matsubara=False):
         self.Hsys = Hsys
         self.t = t
         self.eps = eps
+        self.limit=limit
+        self.dtype = Hsys.dtype
+        
+        
         if isinstance(Hsys,qutip_Qobj):
             self._qutip=True
         else:
             self._qutip=False
-        self.baths=baths
+        if cython:
+            self.baths= [bath_csolve(b.T,eps,b.coupling,b.cutoff,b.label) 
+                         for b in baths]
+        else:
+            self.baths=baths
         self.Qs = Qs
+        self.cython=cython
         self.matsubara=matsubara
     def _tree_flatten(self):
         children=(self.Hsys,self.t,self.eps,self.limit,self.baths,self.dtype)
@@ -50,7 +62,39 @@ class redfield:
     @classmethod
     def _tree_unflatten(cls,aux_data,children):
         return cls(*children,**aux_data)
-    def _gamma(self, ν,bath, w,w1, t):
+    def gamma_fa(self,bath, w, w1, t):
+        r"""
+        It describes the decay rates for the Filtered Approximation of the
+        cumulant equation
+
+        $$\gamma(\omega,\omega^\prime,t)= 2\pi t e^{i \frac{\omega^\prime
+        -\omega}{2}t}\mathrm{sinc} \left(\frac{\omega^\prime-\omega}{2}t\right)
+         \left(J(\omega^\prime) (n(\omega^\prime)+1)J(\omega) (n(\omega)+1)
+         \right)^{\frac{1}{2}}$$
+
+        Parameters
+        ----------
+
+        w : float or numpy.ndarray
+
+        w1 : float or numpy.ndarray
+
+        t : float or numpy.ndarray
+
+        Returns
+        -------
+        float or numpy.ndarray
+            It returns a value or array describing the decay between the levels
+            with energies w and w1 at time t
+
+        """
+        var = (2 * np.pi * t * np.exp(1j * (w1 - w) * t / 2)
+               * np.sinc((w1 - w) * t / (2 * np.pi))
+               * np.sqrt(bath.spectral_density(w1) * (bath.bose(w1) + 1))
+               * np.sqrt(bath.spectral_density(w) * (bath.bose(w) + 1)))
+        return var
+
+    def _gamma_(self, ν,bath, w, w1, t):
         r"""
         It describes the Integrand of the decay rates of the cumulant equation
         for bosonic baths
@@ -74,13 +118,23 @@ class redfield:
             with energies w and w1 at time t
 
         """
-        var = 1j*bath.spectral_density(ν)*bath.bose(ν)*(1-np.exp(1j*t*(w+ν)))/(w+ν)
-        var+= 1j*bath.spectral_density(ν)*(bath.bose(ν)+1)*(1-np.exp(1j*t*(w-ν)))/(w-ν)
-        var2 = 1j*bath.spectral_density(ν)*bath.bose(ν)*(1-np.exp(1j*t*(w1+ν)))/(w1+ν)
-        var2+=1j*bath.spectral_density(ν)*(bath.bose(ν)+1)*(1-np.exp(1j*t*(w1-ν)))/(w1-ν)
-        return var2 + np.conjugate(var)
+        var = (
+            np.exp(1j * (w - w1) / 2 * t)
+            * bath.spectral_density(ν)
+            * (np.sinc((w - ν) / (2 * np.pi) * t)
+               * np.sinc((w1 - ν) / (2 * np.pi) * t))
+            * (bath.bose(ν) + 1)
+        )
+        var += (
+            np.exp(1j * (w - w1) / 2 * t)
+            * bath.spectral_density(ν)
+            * (np.sinc((w + ν) / (2 * np.pi) * t)
+               * np.sinc((w1 + ν) / (2 * np.pi) * t))
+            * bath.bose(ν)
+        )
+        return var
 
-    def _gamma_gen(self, bath ,w, w1, t):
+    def gamma_gen(self, bath ,w, w1, t, approximated=False):
         r"""
         It describes the the decay rates of the cumulant equation
         for bosonic baths
@@ -108,24 +162,27 @@ class redfield:
         """
         if isinstance(t,type(jnp.array([2]))):
             t=np.array(t.tolist())
+        if approximated:
+            return self.gamma_fa(bath,w, w1, t)
         if self.matsubara:
             if w==w1:
                 return self.decayww(bath,w,t)
             else:
-                return np.exp(1j*(w-w1)*t)*self.decayww2(bath,w,w1,t)
+                return self.decayww2(bath,w,w1,t)
+        if self.cython:
+            return bath.gamma(np.real(w),np.real(w1),t,limit=self.limit)
 
-        integrals = quad_vec(
-                self._gamma,
+        else:
+            integrals = quad_vec(
+                self._gamma_,
                 0,
                 np.Inf,
-                args=(bath,w,w1, t),
-                points=[-w,-w1,w,w1],
+                args=(bath,w, w1, t),
                 epsabs=self.eps,
                 epsrel=self.eps,
                 quadrature="gk15"
             )[0]
-        return np.exp(1j*(w-w1)*t)*integrals
-    
+            return t*t*integrals
     def jump_operators(self,Q):
         evals, all_state = self.Hsys.eigenstates()
         N=len(all_state)
@@ -158,7 +215,7 @@ class redfield:
         ws.append(0)
         output = defaultdict(list)
         for k,key in enumerate(ws):
-            output[np.round(key,12)].append(collapse_list[k])
+            output[jnp.round(key,12).item()].append(collapse_list[k])
         eldict={x:sum(y) for x, y in output.items()}
         dictrem = {}
         empty =0*self.Hsys
@@ -167,46 +224,46 @@ class redfield:
                 dictrem[keys] = values
         return dictrem
         
-    def decays(self,combinations,bath,t):
+    def decays(self,combinations,bath,approximated,t=None):
+        if t is None:
+            t=self.t
         rates = {}
         done = []
-        for i in combinations:
+        for i in tqdm(combinations, desc='Calculating Integrals ...', dynamic_ncols=True):
             done.append(i)
             j = (i[1], i[0])
             if (j in done) & (i != j):
                 rates[i] = np.conjugate(rates[j])
             else:
-                rates[i] = self._gamma_gen(bath,i[0], i[1], t)
+                rates[i] = self.gamma_gen(bath,i[0], i[1], t,
+                                                approximated)
         return rates
-    
     def matrix_form(self,jumps,combinations):   
         matrixform={}       
-        for i in combinations:
+        for i in tqdm(combinations, desc='Calculating the generator Matrix ...'):
                 matrixform[i]= (spre(jumps[i[1]]) * spost(jumps[i[0]].dag()) 
                                 -1*(0.5 *(spre(jumps[i[0]].dag() * jumps[i[1]]) 
                                + spost(jumps[i[0]].dag() * jumps[i[1]]))))
         return matrixform
     
-    def generator(self,t):
-        if t==0:
-            return (spre(self.Qs[0])*0)
+    def generator(self,t,approximated=False):
         generators=[]
         for Q,bath in zip(self.Qs,self.baths):
             jumps=self.jump_operators(Q)
             ws=list(jumps.keys())
             combinations=list(itertools.product(ws, ws))
             matrices=self.matrix_form(jumps,combinations)
-            decays=self.decays(combinations,bath,t)
+            decays=self.decays(combinations,bath,approximated,t)
             superop=[]
-            if self._qutip:
+            if self._qutip or self.cython:
                 gen = (matrices[i]*decays[i] for i in combinations)
             else:
                 gen = (matrices[i]*(decays[i]).item() for i in combinations)
             superop.append(sum(gen))
-            generators.extend(superop)
             del gen
             del matrices
             del decays
+        generators.extend(superop)
         return sum(generators)
     
     def evolution(self,rho0,method="BDF"):
@@ -246,28 +303,33 @@ class redfield:
         result = solve_ivp(f, [0, self.t[-1]],
                    y0,
                    t_eval=self.t,method=method)
-        states=[result.y[:,i].reshape(2,2) for i in range(len(self.t))]
+        return result
+    
+    
 
-        return states
-
-    def _decayww2(self,bath,w,w1,t,k=100):
-        term1=(bath.ckr(k)-1j*bath.cki(k))*(np.exp(1j*t*(w-w1))-np.exp(-t*(bath.vk(k)+1j*w1)))
-        term1=term1/(bath.vk(k)+1j*w)
-        term2=(bath.ckr(k)+1j*bath.cki(k))*(np.exp(1j*t*(w-w1))-np.exp(-t*(bath.vk(k)-1j*w)))
-        term2=term2/(bath.vk(k)-1j*w1)
-        return (term1+term2)*np.pi
-    def _decayww(self,bath,w,t,k=100):
-        return self._decayww2(bath,w,w,t,k)
-    def decayww2(self,bath,w,w1,t,k=100):
-        return np.sum(self._decayww2(bath,w,w1,t,k)) 
-    def decayww(self,bath,w,t,k=100):
-        return np.sum(self._decayww(bath,w,t,k)) 
+    def _decayww(self,bath,w,t,k=1000):
+        decay1=-(1j*bath.ckr(k)+bath.cki(k))*(1j-1j*np.exp(-t*(1j*w+bath.vk(k)))+t*(w-1j*bath.vk(k)))
+        decay1=decay1/(w-1j*bath.vk(k))**2
+        return 2*np.real(decay1)*np.pi
+    def _decayww2(self,bath,w,w1,t,k=1000):
+        mul1=(1j*bath.ckr(k)+bath.cki(k))/(w1-1j*bath.vk(k))
+        tem1=(np.exp(1j*t*(w-w1))-np.exp(-bath.vk(k)*t-1j*w1*t))/(bath.vk(k)+1j*w)
+        tem2=1j*(np.exp(1j*(w-w1)*t)-1)/(w-w1)
+        first=mul1*(tem1+tem2)
+        mul2=-(bath.ckr(k)+1j*bath.cki(k))*(1j*bath.vk(k)+(w-w1)*np.exp(-bath.vk(k)*t+1j*t*w)-
+                (w+1j*bath.vk(k))*np.exp(1j*t*(w-w1))+w1)
+        div2=(w+1j*bath.vk(k))*(w-w1)*(w1+1j*bath.vk(k))
+        secod=mul2/div2
+        return (first+secod)*np.pi
+    def decayww2(self,bath,w,w1,t,k=1000):
+        return np.array([np.sum(self._decayww2(bath,w,w1,i,k)) for i in t])
+    def decayww(self,bath,w,t,k=1000):
+        return np.array([np.sum(self._decayww(bath,w,i,k)) for i in t])
     
 tree_util.register_pytree_node(
-    redfield,
-    redfield._tree_flatten,
-    redfield._tree_unflatten)
-    
+    crsolve,
+    crsolve._tree_flatten,
+    crsolve._tree_unflatten)
 # TODO Add Lamb-shift
 # TODO pictures
 # TODO better naming
@@ -275,5 +337,5 @@ tree_util.register_pytree_node(
 # TODO make result object
 # TODO support Tensor Networks
 # Benchmark with the QuatumToolbox,jl based version
-# TODO catch warning from scipy 
 # Habilitate double precision (Maybe single is good for now)
+#TODO Diffrax does not work unless one makes a pytree for Qobj apparently 

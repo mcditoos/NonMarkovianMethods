@@ -1,2 +1,5 @@
 .vscode
 tests/.pytest_cache
+nmm.egg-info
+build
+dist
