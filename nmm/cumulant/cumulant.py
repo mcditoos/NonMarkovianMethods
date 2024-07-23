@@ -271,7 +271,9 @@ class csolve:
 
     def matrix_form(self, jumps, combinations):
         matrixform = {}
-        for i in combinations:
+        for i in tqdm(
+                combinations, desc='Calculating time independent matrices...',
+                dynamic_ncols=True):
             matrixform[i] = (
                 spre(jumps[i[1]]) * spost(jumps[i[0]].dag()) - 1 *
                 (0.5 *
@@ -287,8 +289,11 @@ class csolve:
             combinations = list(itertools.product(ws, ws))
             rates = self.decays(combinations, bath, approximated)
             matrices = self.matrix_form(jumps, combinations)
-            superop = sum([rates[i] * np.array(matrices[i])
-                           for i in combinations])
+            superop = sum(
+                (rates[i] * np.array(matrices[i])
+                 for i in tqdm(
+                     combinations,
+                     desc="Calculating time dependent generators")))
             generators.extend(superop)
         self.generators = self._reformat(generators)
 
