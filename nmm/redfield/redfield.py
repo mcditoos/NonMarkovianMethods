@@ -110,9 +110,9 @@ class redfield:
             t=np.array(t.tolist())
         if self.matsubara:
             if w==w1:
-                return self.decayww(bath,w,t)
+                return self.decayww(bath,w,t,k=self.matsubara)
             else:
-                return np.exp(1j*(w-w1)*t)*self.decayww2(bath,w,w1,t)
+                return np.exp(1j*(w-w1)*t)*self.decayww2(bath,w,w1,t,k=self.matsubara)
 
         integrals = quad_vec(
                 self._gamma,
