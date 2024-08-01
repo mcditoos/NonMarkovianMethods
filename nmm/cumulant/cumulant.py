@@ -194,7 +194,7 @@ class csolve:
             integrals = quad_vec(
                 self._gamma_,
                 0,
-                np.Inf,
+                np.inf,
                 args=(bath, w, w1, t),
                 epsabs=self.eps,
                 epsrel=self.eps,
@@ -247,7 +247,7 @@ class csolve:
         output = defaultdict(list)
         for k, key in enumerate(ws):
             output[jnp.round(key, 12).item()].append(collapse_list[k])
-        eldict = {x: self.sparsify([sum(y)])[0] for x, y in output.items()}
+        eldict = {x: sum(y) for x, y in output.items()}
         dictrem = {}
         empty = 0*self.Hsys
         for keys, values in eldict.items():
