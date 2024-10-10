@@ -15,7 +15,7 @@ import warnings
 from scipy.integrate import solve_ivp
 from jax import tree_util
 from scipy.interpolate import interp1d
-
+import time
 
 @dispatch(qutip_Qobj)
 def spre(op):
@@ -51,7 +51,6 @@ class redfield:
         self.baths = baths
         self.Qs = Qs
         self.matsubara = matsubara
-
     def _tree_flatten(self):
         children = (self.Hsys, self.t, self.eps,
                     self.limit, self.baths, self.dtype)
@@ -61,7 +60,28 @@ class redfield:
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
         return cls(*children, **aux_data)
+    def bose(self,w,bath):
+        r"""
+        It computes the Bose-Einstein distribution
 
+        $$ n(\omega)=\frac{1}{e^{\beta \omega}-1} $$
+
+        Parameters:
+        ----------
+        ν: float
+            The mode at which to compute the thermal population
+
+        Returns:
+        -------
+        float
+            The thermal population of mode ν
+        """
+        if bath.T == 0:
+            return 0
+        if np.isclose(w, 0).all():
+            return 0
+        return np.exp(-w / bath.T) / (1-np.exp(-w / bath.T))
+    
     def _gamma(self, ν, bath, w, w1, t):
         r"""
         It describes the Integrand of the decay rates of the cumulant equation
@@ -86,19 +106,16 @@ class redfield:
             with energies w and w1 at time t
 
         """
-        try:
-            bath.bose(w)
-        except:
-            bath.bose = bath._bose_einstein
-            self._mul = 1/np.pi
-        var = 1j*bath.spectral_density(ν)*bath.bose(
-            ν)*(1-np.exp(1j*t*(w+ν)))/(w+ν)
+ 
+        self._mul = 1/np.pi
+        var = 1j*bath.spectral_density(ν)*self.bose(
+            ν,bath)*(1-np.exp(1j*t*(w+ν)))/(w+ν)
         var += 1j*bath.spectral_density(ν)*(
-            bath.bose(ν)+1)*(1-np.exp(1j*t*(w-ν)))/(w-ν)
-        var2 = 1j*bath.spectral_density(ν)*bath.bose(
-            ν)*(1-np.exp(1j*t*(w1+ν)))/(w1+ν)
+            self.bose(ν,bath)+1)*(1-np.exp(1j*t*(w-ν)))/(w-ν)
+        var2 = 1j*bath.spectral_density(ν)*self.bose(
+            ν,bath)*(1-np.exp(1j*t*(w1+ν)))/(w1+ν)
         var2 += 1j*bath.spectral_density(ν)*(
-            bath.bose(ν)+1)*(1-np.exp(1j*t*(w1-ν)))/(w1-ν)
+            self.bose(ν,bath)+1)*(1-np.exp(1j*t*(w1-ν)))/(w1-ν)
         return (var2 + np.conjugate(var))*self._mul
 
     def _gamma_gen(self, bath, w, w1, t):
@@ -131,9 +148,9 @@ class redfield:
             t = np.array(t.tolist())
         if self.matsubara:
             if w == w1:
-                return self.decayww(bath, w, t, k=self.matsubara)
+                return self.decayww(bath, w, t)
             else:
-                return np.exp(1j*(w-w1)*t)*self.decayww2(bath, w, w1, t, k=self.matsubara)
+                return self.decayww2(bath, w, w1, t)
 
         integrals = quad_vec(
             self._gamma,
@@ -211,14 +228,21 @@ class redfield:
         return matrixform
 
     def prepare_interpolated_generators(self):
-        print("Started interpolation")
+        print("Started integration")
+        start=time.time()
+
         try:
             generators = self.generators
         except:
             self.generator()
             generators = np.array([i.full().flatten()
                                   for i in self.generators])
-
+        print("Finished integration")
+        end=time.time()
+        print(f"Computation Time:{end-start}")
+        print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
+        start=time.time()
+        print("Started interpolation")
         self.interpolated_generators = [
             interp1d(
                 self.t, generators[:, i],
@@ -226,7 +250,10 @@ class redfield:
                 fill_value="extrapolate")
             for i in range(generators.shape[1])]
         self.generator_shape = self.generators[0].shape
-
+        print("Finished interpolation")
+        end=time.time()
+        print(f"Computation Time:{end-start}")
+        print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
     def interpolated_generator(self, t):
         if self.interpolated_generators is None:
             raise ValueError(
@@ -257,7 +284,7 @@ class redfield:
         generate = sum(generators)
         self.generators = generate
 
-    def evolution(self, rho0, method="BDF"):
+    def evolution(self, rho0, method="RK45"):
         r"""
         This function computes the evolution of the state $\rho(0)$
 
@@ -294,32 +321,43 @@ class redfield:
 
         def f(t, y):
             return self.interpolated_generator(t) @ y
+        start=time.time()
+        print("Started Solving the differential equation")
         result = solve_ivp(f, [0, self.t[-1]],
                            y0,
-                           t_eval=self.t, method=method)
+                           t_eval=self.t, method=method,rtol=self.eps,atol=self.eps)
         n = self.Hsys.shape[0]
         states = [result.y[:, i].reshape(n, n)
                   for i in range(len(self.t))]
-
+        print("Finished Solving the differential equation")
+        end=time.time()
+        print(f"Computation Time:{end-start}")
         return states
 
-    def _decayww2(self, bath, w, w1, t, k=100):
-        term1 = (bath.ckr(k)-1j*bath.cki(k)
-                 )*(np.exp(1j*t*(w-w1))-np.exp(-t*(bath.vk(k)+1j*w1)))
-        term1 = term1/(bath.vk(k)+1j*w)
-        term2 = (bath.ckr(k)+1j*bath.cki(k)
-                 )*(np.exp(1j*t*(w-w1))-np.exp(-t*(bath.vk(k)-1j*w)))
-        term2 = term2/(bath.vk(k)-1j*w1)
-        return (term1+term2)*np.pi
+    def _decayww2(self,bath, w, w1, t):
+        cks=np.array([i.coefficient for i in bath.exponents])
+        vks=np.array([i.exponent for i in bath.exponents])
+        ckrs = np.real(cks)
+        ckis=np.imag(cks)
+        result=[]
+        for i in range(len(cks)):
+            term1 = (ckrs[i]-1j*ckis[i]
+                        )*(np.exp(1j*t*(w-w1))-np.exp(-t*(vks[i]+1j*w1)))
+            term1 = term1/(vks[i]+1j*w)
+            term2 = (ckrs[i]+1j*ckis[i]
+                        )*(np.exp(1j*t*(w-w1))-np.exp(-t*(vks[i]-1j*w)))
+            term2 = term2/(vks[i]-1j*w1)
+            result.append((term1+term2))
+        return sum(result)
 
-    def _decayww(self, bath, w, t, k=100):
-        return self._decayww2(bath, w, w, t, k)
+    def _decayww(self, bath, w, t):
+        return self._decayww2(bath, w, w, t)
 
-    def decayww2(self, bath, w, w1, t, k=100):
-        return np.sum(self._decayww2(bath, w, w1, t, k))
+    def decayww2(self, bath, w, w1, t):
+        return self._decayww2(bath, w, w1, t)
 
-    def decayww(self, bath, w, t, k=100):
-        return np.sum(self._decayww(bath, w, t, k))
+    def decayww(self, bath, w, t):
+        return self._decayww(bath, w, t)
 
 
 tree_util.register_pytree_node(
@@ -336,3 +374,39 @@ tree_util.register_pytree_node(
 # Benchmark with the QuatumToolbox,jl based version
 # TODO catch warning from scipy
 # Habilitate double precision (Maybe single is good for now)
+# TODO CHECK Interpolation bits and how this is working in practice, there seems
+# to be some issues
+
+    # def _gamma(self, ν, bath, w, w1, t):
+    #     r"""
+    #     It describes the Integrand of the decay rates of the cumulant equation
+    #     for bosonic baths
+
+    #     $$\Gamma(w,w',t)=\int_{0}^{t} dt_1 \int_{0}^{t} dt_2
+    #     e^{i (w t_1 - w' t_2)} \mathcal{C}(t_{1},t_{2})$$
+
+    #     Parameters:
+    #     ----------
+
+    #     w: float or numpy.ndarray
+
+    #     w1: float or numpy.ndarray
+
+    #     t: float or numpy.ndarray
+
+    #     Returns:
+    #     --------
+    #     float or numpy.ndarray
+    #         It returns a value or array describing the decay between the levels
+    #         with energies w and w1 at time t
+
+    #     """
+    #     sd=bath.spectral_density(ν)
+    #     n=self.bose(ν,bath)
+        
+    #     self._mul = 1/np.pi
+    #     var = sd*n*(1-np.exp(1j*t*(w+ν)))/(w+ν)
+    #     var += sd*(n+1)*(1-np.exp(1j*t*(w-ν)))/(w-ν)
+    #     var2 = sd*n*(1-np.exp(1j*t*(w1+ν)))/(w1+ν)
+    #     var2 += sd*(n+1)*(1-np.exp(1j*t*(w1-ν)))/(w1-ν)
+    #     return (1j*var2 + np.conjugate(1j*var))*self._mul

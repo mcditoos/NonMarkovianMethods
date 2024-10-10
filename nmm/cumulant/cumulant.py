@@ -69,7 +69,28 @@ class csolve:
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
         return cls(*children, **aux_data)
+    def bose(self,w,bath):
+        r"""
+        It computes the Bose-Einstein distribution
 
+        $$ n(\omega)=\frac{1}{e^{\beta \omega}-1} $$
+
+        Parameters:
+        ----------
+        ν: float
+            The mode at which to compute the thermal population
+
+        Returns:
+        -------
+        float
+            The thermal population of mode ν
+        """
+        if bath.T == 0:
+            return 0
+        if np.isclose(w, 0).all():
+            return 0
+        return np.exp(-w / bath.T) / (1-np.exp(-w / bath.T))
+    
     def gamma_fa(self, bath, w, w1, t):
         r"""
         It describes the decay rates for the Filtered Approximation of the
@@ -98,8 +119,8 @@ class csolve:
         """
         var = (2 * np.pi * t * np.exp(1j * (w1 - w) * t / 2)
                * np.sinc((w1 - w) * t / (2 * np.pi))
-               * np.sqrt(bath.spectral_density(w1) * (bath.bose(w1) + 1))
-               * np.sqrt(bath.spectral_density(w) * (bath.bose(w) + 1)))
+               * np.sqrt(bath.spectral_density(w1) * (self.bose(w1,bath) + 1))
+               * np.sqrt(bath.spectral_density(w) * (self.bose(w,bath) + 1)))
         return var
 
     def _gamma_(self, ν, bath, w, w1, t):
@@ -126,30 +147,25 @@ class csolve:
             with energies w and w1 at time t
 
         """
-        try:
-            bath.bose(w)
-        except:
-            bath.bose = bath._bose_einstein
-            self._mul = 1/np.pi
+
+        self._mul = 1/np.pi
         var = (
             np.exp(1j * (w - w1) / 2 * t)
             * bath.spectral_density(ν)
             * (np.sinc((w - ν) / (2 * np.pi) * t)
                * np.sinc((w1 - ν) / (2 * np.pi) * t))
-            * (bath.bose(ν) + 1)
+            * (self.bose(ν,bath) + 1)
         )
         var += (
             np.exp(1j * (w - w1) / 2 * t)
             * bath.spectral_density(ν)
             * (np.sinc((w + ν) / (2 * np.pi) * t)
                * np.sinc((w1 + ν) / (2 * np.pi) * t))
-            * bath.bose(ν)
+            * self.bose(ν,bath)
         )
-        try:
-            if self._mul:
-                var = var*self._mul
-        except:
-            pass
+
+        var = var*self._mul
+    
         return var
 
     def gamma_gen(self, bath, w, w1, t, approximated=False):
@@ -340,32 +356,44 @@ class csolve:
                 self.generators,
                 desc='Computing Exponential of Generators . . . .')]  # this counts time incorrectly
         return states
+    def _decayww(self,bath, w, t):
+        cks=np.array([i.coefficient for i in bath.exponents])
+        vks=np.array([i.exponent for i in bath.exponents])
+        ckrs = np.real(cks)
+        ckis=np.imag(cks)
+        result=[]
+        for i in range(len(cks)):
+            term1 =-(1j*ckrs[i]+ckis[i]
+                   )*(1j-1j*np.exp(-t*(1j*w+vks[i]))+t*(w-1j*vks[i]))
+            term1 = term1/(w-1j*vks[i])**2
+            result.append(term1)
+        return 2*np.real(sum(result))
 
-    def _decayww(self, bath, w, t):
-        k = self.matsubara
-        decay1 = -(1j*bath.ckr(k)+bath.cki(k)
-                   )*(1j-1j*np.exp(-t*(1j*w+bath.vk(k)))+t*(w-1j*bath.vk(k)))
-        decay1 = decay1/(w-1j*bath.vk(k))**2
-        return 2*np.real(decay1)*np.pi
+    def _decayww2(self,bath ,w, w1, t):
+        cks=np.array([i.coefficient for i in bath.exponents])
+        vks=np.array([i.exponent for i in bath.exponents])
+        ckrs = np.real(cks)
+        ckis=np.imag(cks)
+        result=[]
+        for i in range(len(cks)):
+            mul1 = (1j * ckrs[i] + ckis[i]) / (w1 - 1j * vks[i])
+            tem1 = (np.exp(1j * t * (w - w1)) - np.exp(-vks[i] * t - 1j * w1 * t)) / (vks[i] + 1j * w)
+            tem2 = 1j * (np.exp(1j * (w - w1) * t) - 1) / (w - w1)
+            first = mul1 * (tem1 + tem2)
+            
+            mul2 = -(ckrs[i] + 1j * ckis[i]) * (1j * vks[i] + (w - w1) * np.exp(-vks[i] * t + 1j * t * w) 
+                                                - (w + 1j * vks[i]) * np.exp(1j * t * (w - w1)) + w1)
+            div2 = (w + 1j * vks[i]) * (w - w1) * (w1 + 1j * vks[i])
+            secod = mul2 / div2
+            result.append(first+secod)
+        return sum(result)
 
-    def _decayww2(self, bath, w, w1, t):
-        k = self.matsubara
-        mul1 = (1j*bath.ckr(k)+bath.cki(k))/(w1-1j*bath.vk(k))
-        tem1 = (np.exp(1j*t*(w-w1))-np.exp(-bath.vk(k)
-                * t-1j*w1*t))/(bath.vk(k)+1j*w)
-        tem2 = 1j*(np.exp(1j*(w-w1)*t)-1)/(w-w1)
-        first = mul1*(tem1+tem2)
-        mul2 = -(bath.ckr(k)+1j*bath.cki(k))*(1j*bath.vk(k)+(w-w1)
-                                              * np.exp(-bath.vk(k)*t+1j*t*w) - (w+1j*bath.vk(k))*np.exp(1j*t*(w-w1))+w1)
-        div2 = (w+1j*bath.vk(k))*(w-w1)*(w1+1j*bath.vk(k))
-        secod = mul2/div2
-        return (first+secod)*np.pi
 
     def decayww2(self, bath, w, w1, t):
-        return np.array([np.sum(self._decayww2(bath, w, w1, i)) for i in t])
+        return self._decayww2(bath, w, w1, t)
 
     def decayww(self, bath, w, t):
-        return np.array([np.sum(self._decayww(bath, w, i)) for i in t])
+        return self._decayww(bath, w, t)
 
 
 tree_util.register_pytree_node(
