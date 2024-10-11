@@ -363,29 +363,24 @@ class csolve:
         ckis=np.imag(cks)
         result=[]
         for i in range(len(cks)):
-            term1 =-(1j*ckrs[i]+ckis[i]
-                   )*(1j-1j*np.exp(-t*(1j*w+vks[i]))+t*(w-1j*vks[i]))
-            term1 = term1/(w-1j*vks[i])**2
+            term1 =(vks[i]*t-1j*w*t-1)+np.exp(-(vks[i]-1j*w)*t)
+            term1=term1*cks[i]/(vks[i]-1j*w)**2
             result.append(term1)
         return 2*np.real(sum(result))
 
     def _decayww2(self,bath ,w, w1, t):
         cks=np.array([i.coefficient for i in bath.exponents])
         vks=np.array([i.exponent for i in bath.exponents])
-        ckrs = np.real(cks)
-        ckis=np.imag(cks)
         result=[]
         for i in range(len(cks)):
-            mul1 = (1j * ckrs[i] + ckis[i]) / (w1 - 1j * vks[i])
-            tem1 = (np.exp(1j * t * (w - w1)) - np.exp(-vks[i] * t - 1j * w1 * t)) / (vks[i] + 1j * w)
-            tem2 = 1j * (np.exp(1j * (w - w1) * t) - 1) / (w - w1)
-            first = mul1 * (tem1 + tem2)
-            
-            mul2 = -(ckrs[i] + 1j * ckis[i]) * (1j * vks[i] + (w - w1) * np.exp(-vks[i] * t + 1j * t * w) 
-                                                - (w + 1j * vks[i]) * np.exp(1j * t * (w - w1)) + w1)
-            div2 = (w + 1j * vks[i]) * (w - w1) * (w1 + 1j * vks[i])
-            secod = mul2 / div2
-            result.append(first+secod)
+            a=(vks[i]-1j*w1)
+            b=(vks[i]-1j*w)
+            term1=cks[i]*np.exp(-b*t)/(a*b)
+            term2=np.conjugate(cks[i])*np.exp(-np.conjugate(a)*t)/(np.conjugate(a)*np.conjugate(b))
+            term3=cks[i]*((1/b)-(np.exp(1j*(w-w1)*t)/a))
+            term4=np.conjugate(cks[i])*((1/np.conjugate(a))-(np.exp(1j*(w-w1)*t)/np.conjugate(b)))
+            actual=term1+term2+(1j*(term3+term4)/(w-w1))
+            result.append(actual)
         return sum(result)
 
 
