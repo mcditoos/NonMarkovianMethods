@@ -268,7 +268,7 @@ class csolve:
         empty = 0*self.Hsys
         for keys, values in eldict.items():
             if not (values == empty):
-                dictrem[keys] = values
+                dictrem[keys] = values.to("CSR")
         return dictrem
 
     def decays(self, combinations, bath, approximated):
@@ -359,8 +359,6 @@ class csolve:
     def _decayww(self,bath, w, t):
         cks=np.array([i.coefficient for i in bath.exponents])
         vks=np.array([i.exponent for i in bath.exponents])
-        ckrs = np.real(cks)
-        ckis=np.imag(cks)
         result=[]
         for i in range(len(cks)):
             term1 =(vks[i]*t-1j*w*t-1)+np.exp(-(vks[i]-1j*w)*t)

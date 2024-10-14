@@ -202,7 +202,7 @@ class redfield:
         empty = 0*self.Hsys
         for keys, values in eldict.items():
             if not (values == empty):
-                dictrem[keys] = values
+                dictrem[keys] = values.to("CSR")
         return dictrem
 
     def decays(self, combinations, bath, t):
@@ -228,7 +228,7 @@ class redfield:
         return matrixform
 
     def prepare_interpolated_generators(self):
-        print("Started integration")
+        print("Started integration and Generator Calculations")
         start=time.time()
 
         try:
@@ -237,7 +237,7 @@ class redfield:
             self.generator()
             generators = np.array([i.full().flatten()
                                   for i in self.generators])
-        print("Finished integration")
+        print("Finished integration and Generator Calculations")
         end=time.time()
         print(f"Computation Time:{end-start}")
         print("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%")
@@ -337,18 +337,14 @@ class redfield:
     def _decayww2(self,bath, w, w1, t):
         cks=np.array([i.coefficient for i in bath.exponents])
         vks=np.array([i.exponent for i in bath.exponents])
-        ckrs = np.real(cks)
-        ckis=np.imag(cks)
         result=[]
         for i in range(len(cks)):
-            term1 = (ckrs[i]-1j*ckis[i]
-                        )*(np.exp(1j*t*(w-w1))-np.exp(-t*(vks[i]+1j*w1)))
-            term1 = term1/(vks[i]+1j*w)
-            term2 = (ckrs[i]+1j*ckis[i]
-                        )*(np.exp(1j*t*(w-w1))-np.exp(-t*(vks[i]-1j*w)))
-            term2 = term2/(vks[i]-1j*w1)
-            result.append((term1+term2))
-        return sum(result)
+            term1=cks[i]/(vks[i]-1j*w1)
+            term2=np.conjugate(cks[i])/(np.conjugate(vks[i])+1j*w)
+            term1*=(1-np.exp(-(vks[i]-1j*w1)*t))
+            term2*=(1-np.exp(-(np.conjugate(vks[i])+1j*w)*t))
+            result.append(term1+term2)
+        return np.exp(1j*(w-w1)*t)*sum(result)
 
     def _decayww(self, bath, w, t):
         return self._decayww2(bath, w, w, t)
