@@ -39,13 +39,14 @@ def spost(op):
 
 class csolve:
     def __init__(self, Hsys, t, baths, Qs, eps=1e-4, cython=True, limit=50,
-                 matsubara=False, ps=0):
+                 matsubara=False, ps=0,ls=False):
         self.Hsys = Hsys
         self.t = t
         self.eps = eps
         self.limit = limit
         self.dtype = Hsys.dtype
         self.ps = ps
+        self.ls=ls
 
         if isinstance(Hsys, qutip_Qobj):
             self._qutip = True
@@ -287,15 +288,18 @@ class csolve:
 
     def matrix_form(self, jumps, combinations):
         matrixform = {}
+        lsform={}
         for i in tqdm(
                 combinations, desc='Calculating time independent matrices...',
                 dynamic_ncols=True):
+            ada=jumps[i[0]].dag() * jumps[i[1]]
             matrixform[i] = (
                 spre(jumps[i[1]]) * spost(jumps[i[0]].dag()) - 1 *
                 (0.5 *
-                 (spre(jumps[i[0]].dag() * jumps[i[1]]) +
-                  spost(jumps[i[0]].dag() * jumps[i[1]]))))
-        return matrixform
+                 (spre(ada) +spost(ada))))
+            lsform[i]= -1j*(spre(ada)-spost(ada))
+
+        return matrixform,lsform
 
     def generator(self, approximated=False):
         generators = []
@@ -304,12 +308,20 @@ class csolve:
             ws = list(jumps.keys())
             combinations = list(itertools.product(ws, ws))
             rates = self.decays(combinations, bath, approximated)
-            matrices = self.matrix_form(jumps, combinations)
-            superop = sum(
-                (rates[i] * np.array(matrices[i])
-                 for i in tqdm(
-                     combinations,
-                     desc="Calculating time dependent generators")))
+            matrices,lsform = self.matrix_form(jumps, combinations)
+            LS= self.LS(combinations,bath,self.t)            
+            if self.ls is False:
+                superop = sum(
+                    (rates[i] * np.array(matrices[i])
+                    for i in tqdm(
+                        combinations,
+                        desc="Calculating time dependent generators")))
+            else:
+                superop = sum(
+                    (LS[i]*np.array(lsform[i])+rates[i] * np.array(matrices[i])
+                    for i in tqdm(
+                        combinations,
+                        desc="Calculating time dependent generators")))
             generators.extend(superop)
         self.generators = self._reformat(generators)
 
@@ -388,7 +400,41 @@ class csolve:
     def decayww(self, bath, w, t):
         return self._decayww(bath, w, t)
 
-
+    def _LS(self, bath, w,w1, t):
+        if w!=w1:
+            cks=np.array([i.coefficient for i in bath.exponents])
+            vks=np.array([i.exponent for i in bath.exponents])
+            result=[]
+            for i in range(len(cks)):
+                a=(vks[i]-1j*w1)
+                b=(vks[i]-1j*w)
+                term1=cks[i]*np.exp(-b*t)/(a*b)
+                term2=np.conjugate(cks[i])*np.exp(-np.conjugate(a)*t)/(np.conjugate(a)*np.conjugate(b))
+                term3=cks[i]*((1/b)-(np.exp(1j*(w-w1)*t)/a))
+                term4=np.conjugate(cks[i])*((1/np.conjugate(a))-(np.exp(1j*(w-w1)*t)/np.conjugate(b)))
+                actual=term1-term2+(1j*(term3-term4)/(w-w1))
+                result.append(actual)
+            return sum(result)/2j
+        else:
+            cks=np.array([i.coefficient for i in bath.exponents])
+            vks=np.array([i.exponent for i in bath.exponents])
+            result=[]
+            for i in range(len(cks)):
+                term1 =(vks[i]*t-1j*w*t-1)+np.exp(-(vks[i]-1j*w)*t)
+                term1=term1*cks[i]/(vks[i]-1j*w)**2
+                result.append(term1)
+            return np.imag(sum(result))/1j
+    def LS(self, combinations, bath, t):
+        rates = {}
+        done = []
+        for i in combinations:
+            done.append(i)
+            j = (i[1], i[0])
+            if (j in done) & (i != j):
+                rates[i] = np.conjugate(rates[j])
+            else:
+                rates[i] = self._LS(bath, i[0], i[1], t)
+        return rates
 tree_util.register_pytree_node(
     csolve,
     csolve._tree_flatten,

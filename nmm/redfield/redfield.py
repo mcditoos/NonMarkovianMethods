@@ -39,11 +39,12 @@ def spost(op):
 
 class redfield:
     def __init__(self, Hsys, t, baths, Qs, eps=1e-4, matsubara=True,
-                 points=1000):
+                 points=1000,ls=False):
         self.points = points
         self.Hsys = Hsys
         self.t = t
         self.eps = eps
+        self.ls=ls
         if isinstance(Hsys, qutip_Qobj):
             self._qutip = True
         else:
@@ -214,18 +215,20 @@ class redfield:
             if (j in done) & (i != j):
                 rates[i] = np.conjugate(rates[j])
             else:
-                rates[i] = self._gamma_gen(bath, i[0], i[1], t)
+                rates[i] = self._gamma_gen(bath, i[1], i[0], t)
         return rates
 
     def matrix_form(self, jumps, combinations):
         matrixform = {}
+        lsform= {}
         for i in combinations:
+            ada=jumps[i[0]].dag()*jumps[i[1]]
             matrixform[i] = (
                 spre(jumps[i[1]]) * spost(jumps[i[0]].dag()) - 1 *
                 (0.5 *
-                 (spre(jumps[i[0]].dag() * jumps[i[1]]) +
-                  spost(jumps[i[0]].dag() * jumps[i[1]]))))
-        return matrixform
+                (spre(ada) +spost(ada))))
+            lsform[i]= -1j*(spre(ada)-spost(ada))
+        return matrixform,lsform
 
     def prepare_interpolated_generators(self):
         print("Started integration and Generator Calculations")
@@ -269,11 +272,17 @@ class redfield:
             jumps = self.jump_operators(Q)
             ws = list(jumps.keys())
             combinations = list(itertools.product(ws, ws))
-            matrices = self.matrix_form(jumps, combinations)
-            decays = self.decays(combinations, bath, self.t)
+            matrices,lsform = self.matrix_form(jumps, combinations)
+            decays = self.decays(combinations, bath, self.t)    
+            LS= self.LS(combinations,bath,self.t)            
             superop = []
             if self._qutip:
-                gen = (np.array(matrices[i])*decays[i] for i in combinations)
+                if self.ls is True:
+                    gen = (LS[i]*np.array(lsform[i]) + np.array(matrices[i])*decays[i] 
+                           for i in combinations)
+                    print("I am computing LS")
+                else:
+                    gen = (np.array(matrices[i])*decays[i] for i in combinations)
             else:
                 gen = (matrices[i]*(decays[i]).item() for i in combinations)
             superop.append(sum(gen))
@@ -354,8 +363,29 @@ class redfield:
 
     def decayww(self, bath, w, t):
         return self._decayww(bath, w, t)
-
-
+    
+    def _LS(self, bath, w,w1, t):
+        cks=np.array([i.coefficient for i in bath.exponents])
+        vks=np.array([i.exponent for i in bath.exponents])
+        result=[]
+        for i in range(len(cks)):
+            term1=cks[i]/(vks[i]-1j*w1)
+            term2=np.conjugate(cks[i])/(np.conjugate(vks[i])+1j*w)
+            term1*=(1-np.exp(-(vks[i]-1j*w1)*t))
+            term2*=(1-np.exp(-(np.conjugate(vks[i])+1j*w)*t))
+            result.append(term2-term1)
+        return np.exp(1j*(w-w1)*t)*sum(result)/2j
+    def LS(self, combinations, bath, t):
+        rates = {}
+        done = []
+        for i in combinations:
+            done.append(i)
+            j = (i[1], i[0])
+            if (j in done) & (i != j):
+                rates[i] = np.conjugate(rates[j])
+            else:
+                rates[i] = self._LS(bath, i[0], i[1], t)
+        return rates
 tree_util.register_pytree_node(
     redfield,
     redfield._tree_flatten,
@@ -372,37 +402,3 @@ tree_util.register_pytree_node(
 # Habilitate double precision (Maybe single is good for now)
 # TODO CHECK Interpolation bits and how this is working in practice, there seems
 # to be some issues
-
-    # def _gamma(self, ν, bath, w, w1, t):
-    #     r"""
-    #     It describes the Integrand of the decay rates of the cumulant equation
-    #     for bosonic baths
-
-    #     $$\Gamma(w,w',t)=\int_{0}^{t} dt_1 \int_{0}^{t} dt_2
-    #     e^{i (w t_1 - w' t_2)} \mathcal{C}(t_{1},t_{2})$$
-
-    #     Parameters:
-    #     ----------
-
-    #     w: float or numpy.ndarray
-
-    #     w1: float or numpy.ndarray
-
-    #     t: float or numpy.ndarray
-
-    #     Returns:
-    #     --------
-    #     float or numpy.ndarray
-    #         It returns a value or array describing the decay between the levels
-    #         with energies w and w1 at time t
-
-    #     """
-    #     sd=bath.spectral_density(ν)
-    #     n=self.bose(ν,bath)
-        
-    #     self._mul = 1/np.pi
-    #     var = sd*n*(1-np.exp(1j*t*(w+ν)))/(w+ν)
-    #     var += sd*(n+1)*(1-np.exp(1j*t*(w-ν)))/(w-ν)
-    #     var2 = sd*n*(1-np.exp(1j*t*(w1+ν)))/(w1+ν)
-    #     var2 += sd*(n+1)*(1-np.exp(1j*t*(w1-ν)))/(w1-ν)
-    #     return (1j*var2 + np.conjugate(1j*var))*self._mul
