@@ -334,7 +334,7 @@ class redfield:
         print("Started Solving the differential equation")
         result = solve_ivp(f, [0, self.t[-1]],
                            y0,
-                           t_eval=self.t, method=method,rtol=self.eps,atol=self.eps)
+                           t_eval=self.t, method=method)
         n = self.Hsys.shape[0]
         states = [result.y[:, i].reshape(n, n)
                   for i in range(len(self.t))]
