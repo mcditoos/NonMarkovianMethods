@@ -78,13 +78,13 @@ class csolve:
 
         Parameters:
         ----------
-        ν: float
+        nu: float
             The mode at which to compute the thermal population
 
         Returns:
         -------
         float
-            The thermal population of mode ν
+            The thermal population of mode nu
         """
         if bath.T == 0:
             return 0
@@ -124,7 +124,7 @@ class csolve:
                * np.sqrt(bath.spectral_density(w) * (self.bose(w,bath) + 1)))
         return var
 
-    def _gamma_(self, ν, bath, w, w1, t):
+    def _gamma_(self, nu, bath, w, w1, t):
         r"""
         It describes the Integrand of the decay rates of the cumulant equation
         for bosonic baths
@@ -152,17 +152,17 @@ class csolve:
         self._mul = 1/np.pi
         var = (
             np.exp(1j * (w - w1) / 2 * t)
-            * bath.spectral_density(ν)
-            * (np.sinc((w - ν) / (2 * np.pi) * t)
-               * np.sinc((w1 - ν) / (2 * np.pi) * t))
-            * (self.bose(ν,bath) + 1)
+            * bath.spectral_density(nu)
+            * (np.sinc((w - nu) / (2 * np.pi) * t)
+               * np.sinc((w1 - nu) / (2 * np.pi) * t))
+            * (self.bose(nu,bath) + 1)
         )
         var += (
             np.exp(1j * (w - w1) / 2 * t)
-            * bath.spectral_density(ν)
-            * (np.sinc((w + ν) / (2 * np.pi) * t)
-               * np.sinc((w1 + ν) / (2 * np.pi) * t))
-            * self.bose(ν,bath)
+            * bath.spectral_density(nu)
+            * (np.sinc((w + nu) / (2 * np.pi) * t)
+               * np.sinc((w1 + nu) / (2 * np.pi) * t))
+            * self.bose(nu,bath)
         )
 
         var = var*self._mul
@@ -215,7 +215,7 @@ class csolve:
                 args=(bath, w, w1, t),
                 epsabs=self.eps,
                 epsrel=self.eps,
-                quadrature="gk15"
+                quadrature="gk21"
             )[0]
             return t*t*integrals
 
@@ -309,7 +309,6 @@ class csolve:
             combinations = list(itertools.product(ws, ws))
             rates = self.decays(combinations, bath, approximated)
             matrices,lsform = self.matrix_form(jumps, combinations)
-            LS= self.LS(combinations,bath,self.t)            
             if self.ls is False:
                 superop = sum(
                     (rates[i] * np.array(matrices[i])
@@ -317,6 +316,7 @@ class csolve:
                         combinations,
                         desc="Calculating time dependent generators")))
             else:
+                LS= self.LS(combinations,bath,self.t)            
                 superop = sum(
                     (LS[i]*np.array(lsform[i])+rates[i] * np.array(matrices[i])
                     for i in tqdm(
@@ -363,9 +363,9 @@ class csolve:
         """
         self.generator(approximated)
         states = [
-            i.expm()(rho0)
-            for i in tqdm(
-                self.generators,
+            (i).expm()(rho0)
+            for k,i in tqdm(
+                enumerate(self.generators),
                 desc='Computing Exponential of Generators . . . .')]  # this counts time incorrectly
         return states
     def _decayww(self,bath, w, t):
@@ -423,7 +423,7 @@ class csolve:
                 term1 =(vks[i]*t-1j*w*t-1)+np.exp(-(vks[i]-1j*w)*t)
                 term1=term1*cks[i]/(vks[i]-1j*w)**2
                 result.append(term1)
-            return np.imag(sum(result))/1j
+            return np.imag(sum(result))/2
     def LS(self, combinations, bath, t):
         rates = {}
         done = []

@@ -16,6 +16,7 @@ from scipy.integrate import solve_ivp
 from jax import tree_util
 from scipy.interpolate import interp1d
 import time
+from scipy.sparse import csr_matrix
 
 @dispatch(qutip_Qobj)
 def spre(op):
@@ -69,21 +70,20 @@ class redfield:
 
         Parameters:
         ----------
-        ν: float
+        nu: float
             The mode at which to compute the thermal population
 
         Returns:
         -------
         float
-            The thermal population of mode ν
+            The thermal population of mode nu
         """
         if bath.T == 0:
             return 0
         if np.isclose(w, 0).all():
             return 0
-        return np.exp(-w / bath.T) / (1-np.exp(-w / bath.T))
-    
-    def _gamma(self, ν, bath, w, w1, t):
+        return 1 / (np.exp(w / bath.T)-1)
+    def _gamma(self, nu, bath, w, w1, t):
         r"""
         It describes the Integrand of the decay rates of the cumulant equation
         for bosonic baths
@@ -107,16 +107,16 @@ class redfield:
             with energies w and w1 at time t
 
         """
- 
+        #Refactor this to avoid the poles, using the standard Redfield definitions
         self._mul = 1/np.pi
-        var = 1j*bath.spectral_density(ν)*self.bose(
-            ν,bath)*(1-np.exp(1j*t*(w+ν)))/(w+ν)
-        var += 1j*bath.spectral_density(ν)*(
-            self.bose(ν,bath)+1)*(1-np.exp(1j*t*(w-ν)))/(w-ν)
-        var2 = 1j*bath.spectral_density(ν)*self.bose(
-            ν,bath)*(1-np.exp(1j*t*(w1+ν)))/(w1+ν)
-        var2 += 1j*bath.spectral_density(ν)*(
-            self.bose(ν,bath)+1)*(1-np.exp(1j*t*(w1-ν)))/(w1-ν)
+        var = 1j*bath.spectral_density(nu)*self.bose(
+            nu,bath)*(1-np.exp(1j*t*(w+nu)))/(w+nu)
+        var += 1j*bath.spectral_density(nu)*(
+            self.bose(nu,bath)+1)*(1-np.exp(1j*t*(w-nu)))/(w-nu)
+        var2 = 1j*bath.spectral_density(nu)*self.bose(
+            nu,bath)*(1-np.exp(1j*t*(w1+nu)))/(w1+nu)
+        var2 += 1j*bath.spectral_density(nu)*(
+            self.bose(nu,bath)+1)*(1-np.exp(1j*t*(w1-nu)))/(w1-nu)
         return (var2 + np.conjugate(var))*self._mul
 
     def _gamma_gen(self, bath, w, w1, t):
@@ -156,14 +156,15 @@ class redfield:
         integrals = quad_vec(
             self._gamma,
             0,
-            np.Inf,
+            np.inf,
             args=(bath, w, w1, t),
             points=[-w, -w1, w, w1],
             epsabs=self.eps,
             epsrel=self.eps,
             quadrature="gk15"
         )[0]
-        return np.exp(1j*(w-w1)*t)*integrals
+        return integrals #np.exp(1j*(w-w1)*t) remove rotation 
+    #so that it is in the schrodinger picture
 
     def jump_operators(self, Q):
         evals, all_state = self.Hsys.eigenstates()
@@ -227,7 +228,7 @@ class redfield:
                 spre(jumps[i[1]]) * spost(jumps[i[0]].dag()) - 1 *
                 (0.5 *
                 (spre(ada) +spost(ada))))
-            lsform[i]= -1j*(spre(ada)-spost(ada))
+            lsform[i]= 1j*(spre(ada)-spost(ada))
         return matrixform,lsform
 
     def prepare_interpolated_generators(self):
@@ -274,13 +275,11 @@ class redfield:
             combinations = list(itertools.product(ws, ws))
             matrices,lsform = self.matrix_form(jumps, combinations)
             decays = self.decays(combinations, bath, self.t)    
-            LS= self.LS(combinations,bath,self.t)            
             superop = []
             if self._qutip:
                 if self.ls is True:
-                    gen = (LS[i]*np.array(lsform[i]) + np.array(matrices[i])*decays[i] 
-                           for i in combinations)
-                    print("I am computing LS")
+                    LS= self.LS(combinations,bath,self.t)            
+                    gen = (LS[i]*np.array(lsform[i]) + np.array(matrices[i])*decays[i] for i in combinations)
                 else:
                     gen = (np.array(matrices[i])*decays[i] for i in combinations)
             else:
@@ -291,7 +290,7 @@ class redfield:
             del matrices
             del decays
         generate = sum(generators)
-        self.generators = generate
+        self.generators = [i+1j*(spre(self.Hsys)-spost(self.Hsys)) for i in generate]
 
     def evolution(self, rho0, method="RK45"):
         r"""
@@ -329,12 +328,22 @@ class redfield:
         self.prepare_interpolated_generators()
 
         def f(t, y):
-            return self.interpolated_generator(t) @ y
+            # Handle both scalar and vector t
+            if np.isscalar(t):
+                # Single time point
+                return csr_matrix(self.interpolated_generator(t)) @ y
+            else:
+                # Vectorized case
+                # Compute matrix for each time point and apply to corresponding y
+                return np.array([
+                    csr_matrix(self.interpolated_generator(ti)) @ yi 
+                    for ti, yi in zip(t, y.T)
+                ]).T
         start=time.time()
         print("Started Solving the differential equation")
         result = solve_ivp(f, [0, self.t[-1]],
                            y0,
-                           t_eval=self.t, method=method)
+                           t_eval=self.t, method=method,vectorized=True)
         n = self.Hsys.shape[0]
         states = [result.y[:, i].reshape(n, n)
                   for i in range(len(self.t))]
@@ -353,7 +362,7 @@ class redfield:
             term1*=(1-np.exp(-(vks[i]-1j*w1)*t))
             term2*=(1-np.exp(-(np.conjugate(vks[i])+1j*w)*t))
             result.append(term1+term2)
-        return np.exp(1j*(w-w1)*t)*sum(result)
+        return sum(result) # now in schrodinger np.exp(1j*(w-w1)*t)
 
     def _decayww(self, bath, w, t):
         return self._decayww2(bath, w, w, t)
@@ -374,7 +383,7 @@ class redfield:
             term1*=(1-np.exp(-(vks[i]-1j*w1)*t))
             term2*=(1-np.exp(-(np.conjugate(vks[i])+1j*w)*t))
             result.append(term2-term1)
-        return np.exp(1j*(w-w1)*t)*sum(result)/2j
+        return -sum(result)/2j  #np.exp(1j*(w-w1)*t)* now in schrodinger
     def LS(self, combinations, bath, t):
         rates = {}
         done = []
